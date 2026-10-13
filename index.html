@@ -1,0 +1,57 @@
+<!doctype html>
+<html lang="ca">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>0222 · Sistemes Operatius Monolloc</title>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:wght@400;700&family=Bricolage+Grotesque:opsz,wght@12..96,700;12..96,800&family=JetBrains+Mono:wght@600&display=swap">
+<style>
+:root{--bg:#f4f6f9;--surface:#fff;--ink:#17212e;--muted:#566273;--line:#d9dfe8;--code:#14202e;--s1:#2563eb;--s2:#0f766e;--s3:#6d28d9;color-scheme:light}
+@media (prefers-color-scheme:dark){:root{--bg:#0e131a;--surface:#161d27;--ink:#e4eaf2;--muted:#9aa7b8;--line:#2b3644;--code:#0a0f15;--s1:#6ea0ff;--s2:#3fbfb2;--s3:#ab8dff;color-scheme:dark}}
+*{box-sizing:border-box}
+body{margin:0;background:var(--bg);color:var(--ink);font:17px/1.6 "Atkinson Hyperlegible","Segoe UI",system-ui,sans-serif}
+.wrap{max-width:860px;margin:0 auto;padding:40px 16px 60px}
+.term{font:600 .9rem "JetBrains Mono",ui-monospace,monospace;background:var(--code);color:#dbe7f5;border-radius:10px;padding:12px 16px;margin-bottom:22px;overflow-x:auto;white-space:pre}
+.term b{color:#7dd3a0;font-weight:600}
+.eyebrow{margin:0;font-size:.75rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--muted)}
+h1{font:800 clamp(2rem,6vw,3.2rem)/1.1 "Bricolage Grotesque","Segoe UI",sans-serif;margin:.2em 0 .3em;letter-spacing:-.02em}
+.lead{color:var(--muted);font-size:1.1rem;max-width:60ch;margin:0 0 30px}
+.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:14px}
+.card{display:flex;flex-direction:column;gap:6px;background:var(--surface);border:1px solid var(--line);border-top:5px solid var(--c);border-radius:14px;padding:16px 18px;text-decoration:none;color:var(--ink)}
+a.card:hover{border-color:var(--c)}
+.card .tag{font:600 .8rem "JetBrains Mono",monospace;color:var(--c)}
+.card h2{font:700 1.2rem/1.25 "Bricolage Grotesque",sans-serif;margin:0}
+.card p{margin:0;font-size:.93rem;color:var(--muted)}
+.card .go{margin-top:auto;padding-top:8px;font-weight:700;color:var(--c)}
+.card.soon{opacity:.6}
+footer{margin-top:40px;font-size:.85rem;color:var(--muted)}
+</style>
+</head>
+<body>
+<div class="wrap">
+<div class="term"><b>alumne@aula:~$</b> cd smx0222/teoria</div>
+<p class="eyebrow">CFGM SMX · Mòdul 0222</p>
+<h1>Sistemes Operatius Monolloc</h1>
+<p class="lead">Teoria interactiva del mòdul, projecte per projecte. Cada projecte té els seus apartats, simuladors i preguntes per comprovar què has entès.</p>
+<div class="grid">
+  <a class="card" href="teoria-p1/" style="--c:var(--s1)">
+    <span class="tag">Projecte 1 · RA1</span>
+    <h2>Anatomia d’un sistema operatiu</h2>
+    <p>Maquinari, processos, fitxers, permisos, sistemes d’arxius i journaling.</p>
+    <span class="go">Obre la teoria →</span>
+  </a>
+  <div class="card soon" style="--c:var(--s2)">
+    <span class="tag">Projecte 2 · RA2–RA4</span>
+    <h2>Instal·lació i administració</h2>
+    <p>Properament.</p>
+  </div>
+  <div class="card soon" style="--c:var(--s3)">
+    <span class="tag">Projecte 3 · RA5</span>
+    <h2>Virtualització</h2>
+    <p>Properament.</p>
+  </div>
+</div>
+<footer>Material de suport del mòdul 0222 · Sistemes Operatius Monolloc.</footer>
+</div>
+</body>
+</html>

@@ -1,0 +1,3704 @@
+<title>Anatomia d’un sistema operatiu</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Atkinson+Hyperlegible:ital,wght@0,400;0,700;1,400&family=Bricolage+Grotesque:opsz,wght@12..96,500;12..96,700;12..96,800&family=JetBrains+Mono:wght@400;600&display=swap">
+<style>
+/* Layout: barra superior amb cerca + índex lateral per sessions (calaix al mòbil) + un apartat de teoria a la vegada.
+   Cada sessió té el seu color, el mateix que a l'activitat del Moodle. */
+:root{
+  --bg:#f4f6f9; --surface:#ffffff; --sunk:#eaeef4; --ink:#17212e; --muted:#566273; --line:#d9dfe8;
+  --code-bg:#14202e; --code-ink:#dbe7f5; --code-dim:#7f93ab;
+  --s1:#2563eb; --s2:#0f766e; --s3:#15803d; --s4:#c2410c; --s5:#6d28d9; --ax:#475569; --navy:#1e3a5f;
+  --ok:#15803d; --ok-bg:#e5f5ea; --bad:#b42318; --bad-bg:#fdeceb; --warn:#a15c00; --warn-bg:#fff4dc;
+  --tint:color-mix(in srgb, var(--c) 9%, var(--surface));
+  --f-display:"Bricolage Grotesque", "Segoe UI", system-ui, sans-serif;
+  --f-body:"Atkinson Hyperlegible", "Segoe UI", system-ui, sans-serif;
+  --f-mono:"JetBrains Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --c:var(--navy);
+}
+@media (prefers-color-scheme: dark){ :root:not([data-theme="light"]){
+  --bg:#0e131a; --surface:#161d27; --sunk:#1d2632; --ink:#e4eaf2; --muted:#9aa7b8; --line:#2b3644;
+  --code-bg:#0a0f15; --code-ink:#d6e2f0; --code-dim:#7488a0;
+  --s1:#6ea0ff; --s2:#3fbfb2; --s3:#55c97f; --s4:#ff8d55; --s5:#ab8dff; --ax:#9fadc0; --navy:#8db4e8;
+  --ok:#5bd38a; --ok-bg:#12301f; --bad:#ff7b72; --bad-bg:#3a1714; --warn:#f2b552; --warn-bg:#352711;
+  color-scheme:dark }}
+:root[data-theme="dark"]{
+  --bg:#0e131a; --surface:#161d27; --sunk:#1d2632; --ink:#e4eaf2; --muted:#9aa7b8; --line:#2b3644;
+  --code-bg:#0a0f15; --code-ink:#d6e2f0; --code-dim:#7488a0;
+  --s1:#6ea0ff; --s2:#3fbfb2; --s3:#55c97f; --s4:#ff8d55; --s5:#ab8dff; --ax:#9fadc0; --navy:#8db4e8;
+  --ok:#5bd38a; --ok-bg:#12301f; --bad:#ff7b72; --bad-bg:#3a1714; --warn:#f2b552; --warn-bg:#352711;
+  color-scheme:dark }
+[data-sess="s1"]{--c:var(--s1)} [data-sess="s2"]{--c:var(--s2)} [data-sess="s3"]{--c:var(--s3)}
+[data-sess="s4"]{--c:var(--s4)} [data-sess="s5"]{--c:var(--s5)} [data-sess="ax"]{--c:var(--ax)}
+[hidden]{display:none!important}
+*{box-sizing:border-box}
+html{scroll-padding-top:84px}
+body{background:var(--bg);color:var(--ink);font:17px/1.62 var(--f-body);margin:0}
+a{color:var(--c)}
+:focus-visible{outline:3px solid var(--c);outline-offset:2px;border-radius:4px}
+code{font-family:var(--f-mono);font-size:.86em;background:var(--sunk);padding:.08em .35em;border-radius:4px}
+h1,h2,h3,h4{font-family:var(--f-display);text-wrap:balance;line-height:1.2;letter-spacing:-.01em}
+
+/* barra superior */
+.top{position:sticky;top:env(safe-area-inset-top,0px);z-index:20;background:color-mix(in srgb,var(--bg) 88%,transparent);backdrop-filter:blur(8px);border-bottom:1px solid var(--line)}
+.top-in{display:flex;align-items:center;gap:12px;padding-block:10px;padding-inline:16px;max-width:1280px;margin:0 auto}
+.brand{display:flex;align-items:center;gap:10px;text-decoration:none;color:var(--ink);font-family:var(--f-display);font-weight:700;white-space:nowrap}
+.brand .prompt{font-family:var(--f-mono);font-size:.78rem;font-weight:600;background:var(--code-bg);color:var(--code-ink);padding:4px 8px;border-radius:6px}
+.brand .bt{font-size:1rem}
+.menu-btn{display:none}
+.search{position:relative;flex:1;max-width:460px;margin-left:auto}
+.search input{width:100%;font:inherit;font-size:.95rem;padding:8px 12px 8px 34px;border:1px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.search svg{position:absolute;left:10px;top:50%;transform:translateY(-50%);width:16px;height:16px;stroke:var(--muted)}
+.results{position:absolute;top:calc(100% + 6px);left:0;right:0;background:var(--surface);border:1px solid var(--line);border-radius:12px;box-shadow:0 12px 32px rgba(10,20,40,.18);max-height:min(70vh,520px);overflow:auto;padding:6px}
+.results a{display:block;padding:8px 10px;border-radius:8px;text-decoration:none;color:var(--ink)}
+.results a:hover,.results a.sel{background:var(--sunk)}
+.results .r-where{display:block;font-size:.75rem;letter-spacing:.04em;text-transform:uppercase;color:var(--c);font-weight:700}
+.results .r-snip{font-size:.88rem;color:var(--muted);display:block}
+.results mark{background:color-mix(in srgb,var(--c) 25%,transparent);color:inherit;border-radius:3px}
+.results .none{padding:10px;color:var(--muted);font-size:.9rem}
+.prog-mini{font-size:.8rem;color:var(--muted);white-space:nowrap;font-variant-numeric:tabular-nums}
+
+/* estructura */
+.shell{display:grid;grid-template-columns:290px minmax(0,1fr);gap:40px;max-width:1280px;margin:0 auto;padding-inline:16px;padding-block:24px 80px}
+.side{position:sticky;top:calc(env(safe-area-inset-top,0px) + 76px);align-self:start;max-height:calc(100vh - 96px);overflow:auto;padding-right:6px}
+.ng{margin-bottom:18px}
+.ng-t{margin:0 0 6px;font-size:.72rem;font-weight:700;letter-spacing:.07em;text-transform:uppercase;color:var(--c);display:flex;align-items:center;gap:8px}
+.ng-t::before{content:"";width:10px;height:10px;border-radius:3px;background:var(--c)}
+.ng ul{list-style:none;margin:0;padding:0}
+.ng a{display:grid;grid-template-columns:26px 1fr 16px;gap:6px;align-items:start;padding:6px 8px;border-radius:8px;text-decoration:none;color:var(--ink);font-size:.93rem;line-height:1.35}
+.ng a:hover{background:var(--sunk)}
+.ng a.on{background:var(--tint);box-shadow:inset 3px 0 0 var(--c)}
+.ng .n{font-family:var(--f-mono);font-size:.8rem;color:var(--c);font-weight:600;padding-top:1px}
+.ng .st{width:14px;height:14px;border-radius:50%;border:2px solid var(--line);margin-top:3px}
+.ng .st.done{background:var(--c);border-color:var(--c)}
+.home-link{display:flex;gap:8px;align-items:center;padding:8px;border-radius:8px;text-decoration:none;color:var(--ink);font-weight:700;margin-bottom:14px}
+.home-link:hover{background:var(--sunk)}
+main{min-width:0}
+.chap,.home{max-width:780px}
+
+/* capçalera d'apartat */
+.chap-head{border-bottom:2px solid var(--c);padding-bottom:14px;margin-bottom:22px}
+.chap-meta{display:flex;flex-wrap:wrap;gap:8px;margin:0 0 10px}
+.sess-chip,.ca-chip{font-size:.75rem;font-weight:700;letter-spacing:.04em;padding:3px 10px;border-radius:99px}
+.sess-chip{background:var(--c);color:var(--surface)}
+.ca-chip{border:1.5px solid var(--c);color:var(--c);font-family:var(--f-mono);letter-spacing:0}
+.chap-head h1{font-size:clamp(1.8rem,4.4vw,2.6rem);margin:0;font-weight:800}
+.chap-head .num{color:var(--c)}
+.chap h2{font-size:1.5rem;margin:2.2em 0 .5em;padding-top:.2em}
+.chap h3{font-size:1.15rem;margin:1.6em 0 .4em}
+.chap h4{font-size:1rem;margin:1.3em 0 .3em;color:var(--c)}
+.chap p,.chap li{max-width:68ch}
+.eyebrow{margin:0 0 6px;font-size:.72rem;font-weight:700;letter-spacing:.08em;text-transform:uppercase;color:var(--c)}
+.small{font-size:.88rem;color:var(--muted)}
+
+.summary{background:var(--tint);border:1px solid color-mix(in srgb,var(--c) 30%,transparent);border-radius:14px;padding:18px 20px;margin:0 0 20px}
+.summary p{margin:.3em 0}
+.summary p:not(.eyebrow){font-size:1.06rem}
+.summary .matters{font-size:.98rem!important;border-top:1px dashed color-mix(in srgb,var(--c) 40%,transparent);padding-top:10px;margin-top:10px}
+.ontoc{border-left:2px solid var(--line);padding:2px 0 2px 16px;margin:0 0 26px}
+.ontoc ol{margin:0;padding:0;list-style:none;columns:2 260px;column-gap:24px}
+.ontoc li{font-size:.92rem;break-inside:avoid;margin-bottom:3px}
+.ontoc a{color:var(--ink);text-decoration:none}
+.ontoc a:hover{color:var(--c);text-decoration:underline}
+
+.callout{border-radius:10px;padding:12px 16px;background:var(--sunk);border-left:4px solid var(--muted)}
+.callout.key{border-left-color:var(--c);background:var(--tint)}
+.callout.why{border-left-color:var(--navy)}
+.callout.warn{border-left-color:var(--warn);background:var(--warn-bg)}
+
+.tw{overflow-x:auto;margin:14px 0 18px;border:1px solid var(--line);border-radius:10px;background:var(--surface)}
+.tw table{border-collapse:collapse;width:100%;font-size:.92rem;line-height:1.45}
+.tw th{background:var(--sunk);text-align:left;font-weight:700;color:var(--ink)}
+.tw th,.tw td{padding:8px 12px;border-bottom:1px solid var(--line);vertical-align:top}
+.tw tr:last-child td{border-bottom:0}
+.tw tbody tr:nth-child(even) td{background:color-mix(in srgb,var(--sunk) 45%,transparent)}
+.code{position:relative;margin:12px 0 16px}
+.code pre{background:var(--code-bg);color:var(--code-ink);font:14px/1.55 var(--f-mono);padding:14px 16px;border-radius:10px;overflow-x:auto;margin:0}
+.code pre code{background:none;padding:0;font-size:inherit;color:inherit}
+.copy{position:absolute;top:8px;right:8px;font:600 .72rem var(--f-body);background:rgba(255,255,255,.1);color:var(--code-ink);border:1px solid rgba(255,255,255,.2);border-radius:6px;padding:3px 8px;cursor:pointer}
+.copy:hover{background:rgba(255,255,255,.2)}
+
+details.more{border:1px dashed color-mix(in srgb,var(--c) 45%,var(--line));border-radius:12px;margin:22px 0;background:var(--surface)}
+details.more>summary{cursor:pointer;padding:12px 16px;font-family:var(--f-display);font-weight:700;font-size:1.05rem;list-style:none;display:flex;gap:10px;align-items:center;flex-wrap:wrap}
+details.more>summary::-webkit-details-marker{display:none}
+details.more>summary::after{content:"+";margin-left:auto;font-family:var(--f-mono);color:var(--c);font-size:1.2rem}
+details.more[open]>summary::after{content:"−"}
+.more-tag{font:700 .68rem var(--f-body);letter-spacing:.07em;text-transform:uppercase;background:var(--sunk);color:var(--muted);padding:3px 8px;border-radius:99px}
+.more-body{padding:0 18px 14px}
+
+.dossier{border:1.5px solid var(--line);border-radius:14px;padding:4px 20px 12px;margin:34px 0 10px;background:var(--surface)}
+.dossier h3::before{content:"✎ ";color:var(--c)}
+
+/* botons */
+.btn{font:700 .93rem var(--f-body);border:1.5px solid var(--c);background:var(--c);color:var(--surface);padding:9px 16px;border-radius:10px;cursor:pointer}
+.btn.ghost{background:transparent;color:var(--c)}
+.btn:hover{filter:brightness(1.08)}
+.btn:disabled{opacity:.45;cursor:default;filter:none}
+.chap-foot{margin-top:40px;padding-top:20px;border-top:1px solid var(--line);display:flex;flex-wrap:wrap;gap:16px;align-items:center;justify-content:space-between}
+.done-btn.is-done{background:transparent;color:var(--c)}
+.pn{display:flex;gap:10px;flex-wrap:wrap}
+.pn a{display:flex;flex-direction:column;text-decoration:none;color:var(--ink);border:1px solid var(--line);border-radius:10px;padding:8px 14px;background:var(--surface);font-size:.9rem;max-width:260px}
+.pn a span{font-size:.72rem;color:var(--muted);text-transform:uppercase;letter-spacing:.06em}
+.pn a:hover{border-color:var(--c)}
+
+/* preguntes */
+.quiz{margin-top:44px;padding:6px 22px 18px;border-radius:16px;background:var(--tint);border:1px solid color-mix(in srgb,var(--c) 28%,transparent)}
+.quiz h2{margin-top:.8em!important}
+.q{background:var(--surface);border:1px solid var(--line);border-radius:12px;padding:14px 16px;margin:14px 0}
+.qq{font-weight:700;margin:0 0 10px}
+.qq .qn{font-family:var(--f-mono);color:var(--c);margin-right:6px}
+.opts{display:grid;gap:8px}
+.opt{font:inherit;font-size:.97rem;text-align:left;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:10px;padding:9px 12px;cursor:pointer}
+.opt:hover:not(:disabled){border-color:var(--c)}
+.opt.right{border-color:var(--ok);background:var(--ok-bg)}
+.opt.wrong{border-color:var(--bad);background:var(--bad-bg)}
+.opt:disabled{cursor:default}
+.tf{display:flex;gap:10px;flex-wrap:wrap}
+.tf .opt{min-width:110px;text-align:center}
+.fb{margin:10px 0 0;padding:9px 12px;border-radius:8px;font-size:.93rem}
+.fb.ok{background:var(--ok-bg);color:var(--ink);border-left:4px solid var(--ok)}
+.fb.ko{background:var(--bad-bg);color:var(--ink);border-left:4px solid var(--bad)}
+.bl-line{margin:6px 0;line-height:2.3}
+.bl-in{font:inherit;font-family:var(--f-mono);font-size:.92rem;border:none;border-bottom:2px solid var(--c);background:var(--sunk);color:var(--ink);padding:2px 6px;border-radius:4px 4px 0 0;width:9ch}
+.bl-in.right{border-color:var(--ok);background:var(--ok-bg)}
+.bl-in.wrong{border-color:var(--bad);background:var(--bad-bg)}
+.q-actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:10px}
+.bank{display:flex;flex-wrap:wrap;gap:8px;margin:4px 0 12px;padding:10px;border:1.5px dashed var(--line);border-radius:10px;min-height:48px}
+.chip{font:600 .92rem var(--f-body);border:1.5px solid var(--c);color:var(--c);background:var(--surface);border-radius:99px;padding:4px 12px;cursor:pointer}
+.chip.picked{background:var(--c);color:var(--surface)}
+.slot{font:600 .92rem var(--f-body);min-width:8ch;border:none;border-bottom:2px solid var(--c);background:var(--sunk);color:var(--ink);padding:2px 10px;border-radius:4px 4px 0 0;cursor:pointer}
+.slot.empty{color:var(--muted)}
+.slot.right{border-color:var(--ok);background:var(--ok-bg)}
+.slot.wrong{border-color:var(--bad);background:var(--bad-bg)}
+.qscore{font-weight:700;font-size:1.05rem;margin:14px 0 4px}
+.qscore:empty{display:none}
+
+/* eines interactives */
+.tool{margin:26px 0}
+.tool-card{border:2px solid var(--c);border-radius:16px;background:var(--surface);overflow:hidden}
+.tool-head{background:var(--c);color:var(--surface);padding:10px 18px;display:flex;gap:10px;align-items:baseline;flex-wrap:wrap}
+.tool-head b{font-family:var(--f-display);font-size:1.1rem}
+.tool-head span{font-size:.75rem;letter-spacing:.07em;text-transform:uppercase;font-weight:700;opacity:.9}
+.tool-body{padding:16px 18px}
+.tool-body p{margin:.4em 0}
+.row{display:flex;flex-wrap:wrap;gap:10px;align-items:center}
+.field{font:inherit;font-size:.95rem;padding:6px 10px;border:1.5px solid var(--line);border-radius:8px;background:var(--surface);color:var(--ink)}
+.out{font-family:var(--f-mono);font-variant-numeric:tabular-nums}
+.big{font-family:var(--f-mono);font-size:1.5rem;font-weight:600}
+.msg{padding:9px 12px;border-radius:8px;margin-top:10px;font-size:.95rem}
+.msg.ok{background:var(--ok-bg);border-left:4px solid var(--ok)}
+.msg.ko{background:var(--bad-bg);border-left:4px solid var(--bad)}
+.msg.info{background:var(--sunk);border-left:4px solid var(--c)}
+.bits{display:grid;grid-template-columns:repeat(8,minmax(0,1fr));gap:6px;margin:6px 0 12px}
+.bits.gap4 .bit:nth-child(4){margin-right:6px}
+.bit{display:flex;flex-direction:column;align-items:center;gap:2px;border:1.5px solid var(--line);border-radius:10px;background:var(--sunk);color:var(--muted);padding:6px 0;cursor:pointer;font:inherit}
+.bit .w{font-size:.72rem;font-family:var(--f-mono)}
+.bit .v{font-family:var(--f-mono);font-size:1.4rem;font-weight:600}
+.bit.on{background:var(--c);border-color:var(--c);color:var(--surface)}
+.kv{display:grid;grid-template-columns:max-content 1fr;gap:4px 14px;font-size:.95rem}
+.kv dt{color:var(--muted)} .kv dd{margin:0;font-family:var(--f-mono)}
+.permgrid{display:grid;grid-template-columns:auto repeat(3,52px);gap:6px;align-items:center;margin:8px 0 12px;width:max-content;max-width:100%}
+.permgrid .h{font-size:.75rem;text-align:center;color:var(--muted);font-family:var(--f-mono)}
+.permgrid .who{font-weight:700;font-size:.93rem;padding-right:8px}
+.pbit{font:600 1.1rem var(--f-mono);height:42px;border-radius:8px;border:1.5px solid var(--line);background:var(--sunk);color:var(--muted);cursor:pointer}
+.pbit.on{background:var(--c);color:var(--surface);border-color:var(--c)}
+.presets{display:flex;flex-wrap:wrap;gap:6px}
+.preset{font:600 .85rem var(--f-mono);border:1px solid var(--line);background:var(--surface);color:var(--ink);border-radius:6px;padding:3px 9px;cursor:pointer}
+.preset:hover{border-color:var(--c)}
+.seg{display:inline-flex;border:1.5px solid var(--c);border-radius:9px;overflow:hidden}
+.seg button{font:600 .88rem var(--f-body);border:0;background:var(--surface);color:var(--c);padding:5px 12px;cursor:pointer}
+.seg button.on{background:var(--c);color:var(--surface)}
+.files{display:grid;grid-template-columns:repeat(auto-fill,minmax(150px,1fr));gap:6px;margin:10px 0}
+.file{font:.88rem var(--f-mono);padding:6px 10px;border-radius:8px;border:1.5px solid var(--line);background:var(--sunk);color:var(--muted);overflow-wrap:anywhere}
+.file.hit{border-color:var(--c);background:var(--tint);color:var(--ink);font-weight:600}
+.svgwrap{overflow-x:auto}
+.svgwrap svg{display:block;width:100%;min-width:520px;height:auto}
+.st-node rect{fill:var(--sunk);stroke:var(--line);stroke-width:1.5}
+.st-node text{fill:var(--ink);font:600 13px var(--f-body)}
+.st-node.cur rect{fill:var(--c);stroke:var(--c)}
+.st-node.cur text{fill:var(--surface)}
+.arrow{stroke:var(--muted);stroke-width:1.6;fill:none}
+.evs{display:flex;flex-wrap:wrap;gap:8px;margin-top:10px}
+.ev{font:inherit;font-size:.9rem;border:1.5px solid var(--c);color:var(--ink);background:var(--surface);border-radius:9px;padding:6px 11px;cursor:pointer;text-align:left}
+.ev:hover:not(:disabled){background:var(--tint)}
+.ev:disabled{opacity:.35;cursor:default;border-color:var(--line)}
+.ev code{font-size:.82em}
+.fsreq{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:6px 16px;margin:6px 0 14px}
+.fsreq label{display:flex;gap:8px;align-items:flex-start;font-size:.95rem;cursor:pointer}
+.fsreq input{margin-top:5px;accent-color:var(--c)}
+.fscards{display:grid;grid-template-columns:repeat(auto-fit,minmax(160px,1fr));gap:10px}
+.fsc{border:1.5px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--surface)}
+.fsc h4{margin:0 0 4px;font-size:1.1rem;color:var(--ink)}
+.fsc .verdict{font-size:.78rem;font-weight:700;text-transform:uppercase;letter-spacing:.05em}
+.fsc.pass{border-color:var(--ok);background:var(--ok-bg)} .fsc.pass .verdict{color:var(--ok)}
+.fsc.fail .verdict{color:var(--bad)}
+.fsc ul{margin:6px 0 0;padding-left:18px;font-size:.85rem;color:var(--muted)}
+.jsteps{list-style:none;padding:0;margin:10px 0;display:grid;gap:6px}
+.jsteps li{display:flex;gap:10px;align-items:center;padding:7px 10px;border-radius:8px;background:var(--sunk);color:var(--muted);font-size:.94rem}
+.jsteps li .m{font-family:var(--f-mono);width:1.4em;text-align:center}
+.jsteps li.doing{outline:2px solid var(--c);color:var(--ink)}
+.jsteps li.done{color:var(--ink);background:var(--tint)}
+.jsteps li.journal{border-left:4px solid var(--warn)}
+.filter{display:flex;gap:10px;align-items:center;margin:0 0 10px}
+.filter label{font-weight:700;font-size:.9rem}
+.filter input{flex:1;font:inherit;padding:8px 12px;border:1.5px solid var(--line);border-radius:10px;background:var(--surface);color:var(--ink)}
+.flash{animation:flash 1.6s ease}
+@keyframes flash{0%,40%{background:color-mix(in srgb,var(--c) 22%,transparent)}100%{background:transparent}}
+
+/* portada */
+.hero{padding:8px 0 22px;border-bottom:1px solid var(--line);margin-bottom:26px}
+.term{font-family:var(--f-mono);font-size:.9rem;background:var(--code-bg);color:var(--code-ink);border-radius:10px;padding:12px 16px;margin:0 0 20px;overflow-x:auto;white-space:pre;line-height:1.6}
+.term .p{color:#7dd3a0} .term .d{color:var(--code-dim)}
+.hero h1{font-size:clamp(2.2rem,6vw,3.6rem);font-weight:800;margin:0 0 8px;letter-spacing:-.025em}
+.hero .lead{font-size:1.15rem;color:var(--muted);max-width:60ch;margin:0 0 18px}
+.hero .row{gap:14px}
+.pbar{height:10px;border-radius:99px;background:var(--sunk);overflow:hidden;flex:1;min-width:140px;max-width:320px}
+.pbar i{display:block;height:100%;background:var(--navy);width:0;transition:width .4s}
+.office{display:grid;grid-template-columns:repeat(4,minmax(0,1fr));gap:8px;margin:12px 0}
+.oc{font:inherit;text-align:left;border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:12px;padding:10px 12px;cursor:pointer;display:flex;flex-direction:column;gap:2px}
+.oc b{font-family:var(--f-display);font-size:1rem}
+.oc span{font-size:.8rem;color:var(--muted)}
+.oc.on{border-color:var(--c);background:var(--tint)}
+.oc-out{border-radius:12px;background:var(--sunk);padding:14px 16px;min-height:96px}
+.oc-out h3{margin:0 0 4px;font-size:1.1rem}
+.oc-out p{margin:0 0 6px}
+.sesscards{display:grid;grid-template-columns:repeat(auto-fit,minmax(230px,1fr));gap:12px;margin:12px 0 26px}
+.sc{border:1px solid var(--line);border-top:5px solid var(--c);border-radius:12px;background:var(--surface);padding:12px 14px}
+.sc h3{margin:0 0 6px;font-size:1rem}
+.sc ul{list-style:none;margin:0;padding:0;font-size:.92rem}
+.sc li{display:flex;gap:6px;align-items:baseline;margin:3px 0}
+.sc li a{color:var(--ink)}
+.sc .tick{color:var(--c);font-weight:700;width:1em;flex:none}
+.home h2{font-size:1.35rem;margin:1.6em 0 .3em}
+
+@media (max-width: 960px){
+  .shell{grid-template-columns:minmax(0,1fr);gap:0}
+  .side{position:fixed;inset:0 auto 0 0;width:min(320px,86vw);max-height:none;background:var(--surface);z-index:40;padding:calc(env(safe-area-inset-top,0px) + 16px) 14px 30px;border-right:1px solid var(--line);transform:translateX(-102%);transition:transform .25s}
+  .side.open{transform:none;box-shadow:0 0 0 100vmax rgba(0,0,0,.35)}
+  .menu-btn{display:inline-flex;align-items:center;gap:6px;font:700 .9rem var(--f-body);border:1.5px solid var(--line);background:var(--surface);color:var(--ink);border-radius:9px;padding:6px 10px;cursor:pointer}
+  .brand .bt,.prog-mini{display:none}
+  .office{grid-template-columns:repeat(2,minmax(0,1fr))}
+}
+@media (max-width: 520px){
+  body{font-size:16px}
+  .brand .prompt{display:none}
+  .quiz{padding:4px 12px 14px}
+  .bit .v{font-size:1.1rem}
+}
+@media (prefers-reduced-motion: reduce){*{transition:none!important;animation:none!important}}
+</style>
+<header class="top">
+  <div class="top-in">
+    <button class="menu-btn" id="menuBtn" type="button" aria-controls="side" aria-expanded="false">☰ Índex</button>
+    <a class="brand" href="#inici"><span class="prompt">~$ P1</span><span class="bt">Anatomia d’un SO</span></a>
+    <div class="search" role="search">
+      <svg viewBox="0 0 24 24" fill="none" stroke-width="2" aria-hidden="true"><circle cx="11" cy="11" r="7"/><path d="M20 20l-3.5-3.5"/></svg>
+      <input id="q" type="search" placeholder="Cerca a la teoria (RAM, chmod, exFAT…)" autocomplete="off" aria-label="Cerca a la teoria">
+      <div class="results" id="results" hidden></div>
+    </div>
+    <span class="prog-mini" id="progMini"></span>
+  </div>
+</header>
+<div class="shell">
+  <aside class="side" id="side" aria-label="Índex de la teoria">
+    <a class="home-link" href="#inici">⌂ Inici</a>
+    <div class="ng" data-sess="s1"><p class="ng-t">Sessió 1 · Radiografia del sistema</p><ul><li><a href="#c1" data-nav="c1"><span class="n">1</span><span class="t">Què és un sistema informàtic?</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#c2" data-nav="c2"><span class="n">2</span><span class="t">Què és un sistema operatiu?</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#c3" data-nav="c3"><span class="n">3</span><span class="t">Interfície gràfica i terminal</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#c4" data-nav="c4"><span class="n">4</span><span class="t">Com representa la informació un ordinador?</span><span class="st" aria-hidden="true"></span></a></li></ul></div><div class="ng" data-sess="s2"><p class="ng-t">Sessió 2 · Processos sota observació</p><ul><li><a href="#c5" data-nav="c5"><span class="n">5</span><span class="t">Què és un procés?</span><span class="st" aria-hidden="true"></span></a></li></ul></div><div class="ng" data-sess="s3"><p class="ng-t">Sessió 3 · Mapa del sistema d’arxius</p><ul><li><a href="#c6" data-nav="c6"><span class="n">6</span><span class="t">Fitxers i directoris</span><span class="st" aria-hidden="true"></span></a></li></ul></div><div class="ng" data-sess="s4"><p class="ng-t">Sessió 4 · Gestió de permisos</p><ul><li><a href="#c7" data-nav="c7"><span class="n">7</span><span class="t">Permisos d’arxius i directoris</span><span class="st" aria-hidden="true"></span></a></li></ul></div><div class="ng" data-sess="s5"><p class="ng-t">Sessió 5 · Quin sistema d’arxius triaries?</p><ul><li><a href="#c8" data-nav="c8"><span class="n">8</span><span class="t">Sistemes d’arxius</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#c9" data-nav="c9"><span class="n">9</span><span class="t">Què és el journaling?</span><span class="st" aria-hidden="true"></span></a></li></ul></div><div class="ng" data-sess="ax"><p class="ng-t">Annexos</p><ul><li><a href="#ca" data-nav="ca"><span class="n">A</span><span class="t">Ordres de referència</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#cb" data-nav="cb"><span class="n">B</span><span class="t">Glossari</span><span class="st" aria-hidden="true"></span></a></li><li><a href="#cc" data-nav="cc"><span class="n">C</span><span class="t">Solucions dels exercicis</span><span class="st" aria-hidden="true"></span></a></li></ul></div>
+  </aside>
+  <main id="main">
+    <article class="home" id="inici">
+      <section class="hero">
+<div class="term" aria-hidden="true"><span class="p">alumne@aula:~$</span> whoami
+alumne
+<span class="p">alumne@aula:~$</span> <span class="d"># Avui descobriràs què passa a dins d’aquest ordinador</span></div>
+        <p class="eyebrow">Mòdul 0222 · Projecte 1 · RA1</p>
+        <h1>Anatomia d’un sistema operatiu</h1>
+        <p class="lead">Tota la teoria del projecte, apartat per apartat. Llegeix l’apartat abans de cada sessió, juga amb els simuladors i comprova què has entès amb les preguntes.</p>
+        <div class="row">
+          <a class="btn" id="startBtn" href="#c1">Comença per l’apartat 1</a>
+          <div class="pbar" aria-hidden="true"><i id="pbarI"></i></div>
+          <span class="small" id="progTxt"></span>
+        </div>
+      </section>
+
+      <h2>L’ordinador és una oficina</h2>
+      <p>Aquesta comparació t’acompanyarà tot el projecte. Toca cada element de l’oficina per veure a què correspon dins de l’ordinador.</p>
+      <div class="office" id="office" data-sess="s1"></div>
+      <div class="oc-out" id="ocOut" aria-live="polite"></div>
+
+      <h2>Què llegir abans de cada sessió</h2>
+      <div class="sesscards" id="sessCards"></div>
+
+      <h2>Simuladors per practicar</h2>
+      <div class="sesscards" id="toolCards"></div>
+      <p class="small">El teu progrés (apartats llegits i puntuacions) es guarda només en aquest navegador.</p>
+    </article>
+    <article class="chap" id="c1" data-sess="s1" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 1 · Radiografia del sistema</span><span class="ca-chip">CA1.1</span></p>
+  <h1><span class="num">1</span> Què és un sistema informàtic?</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>Imagina l’ordinador com una oficina. Les persones que treballen són la CPU i
+  els seus nuclis. La taula on tens els papers que fas servir ara és la RAM, i
+  l’armari on ho guardes tot és el disc. El gerent que ho organitza tot és el
+  sistema operatiu.</p><p class="matters"><strong>Per què t’importa?</strong> Quan un ordinador va lent, saber si li
+  falta «taula» (RAM) o «persones» (nuclis) et diu què cal millorar abans de
+  gastar diners.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c1-1">1.1 Les parts d’un sistema informàtic</a></li><li><a href="#c1-2">1.2 Model general d’un sistema informàtic</a></li><li><a href="#c1-3">1.4 CPU · El cervell del sistema</a></li><li><a href="#c1-4">1.5 Memòria RAM</a></li><li><a href="#c1-5">1.6 Emmagatzematge</a></li><li><a href="#c1-6">1.7 Perifèrics</a></li><li><a href="#c1-7">1.8 Maquinari físic i maquinari virtual</a></li><li><a href="#c1-8">1.9 Com consultar el maquinari</a></li></ol></nav>
+
+
+<p>Un sistema informàtic és el conjunt d’elements que permeten:</p>
+<ul>
+<li>Introduir informació.</li>
+<li>Processar dades.</li>
+<li>Emmagatzemar informació.</li>
+<li>Comunicar dades.</li>
+<li>Obtenir resultats.</li>
+</ul>
+<p>Un ordinador no és només una caixa amb components. És un sistema format per
+  diferents capes que treballen juntes.</p>
+<h2 id="c1-1">1.1 Les parts d’un sistema informàtic</h2>
+<h3 id="c1-h1">1. Maquinari (Hardware)</h3>
+<p>El maquinari són tots els elements físics que podem tocar.</p>
+<p>Exemples:</p>
+<ul>
+<li>Processador (CPU).</li>
+<li>Memòria RAM.</li>
+<li>Disc SSD o HDD.</li>
+<li>Placa base.</li>
+<li>Targeta gràfica.</li>
+<li>Targeta de xarxa.</li>
+<li>Teclat i ratolí.</li>
+<li>Pantalla.</li>
+</ul>
+<h3 id="c1-h2">2. Programari (Software)</h3>
+<p>El programari és el conjunt d’instruccions que indiquen a l’ordinador què ha
+  de fer.</p>
+<p>Sense programari, el maquinari no tindria cap utilitat.</p>
+<p>Exemples:</p>
+<ul>
+<li>Windows 11.</li>
+<li>Ubuntu Linux.</li>
+<li>Android.</li>
+<li>Firefox.</li>
+<li>LibreOffice.</li>
+<li>Editors de vídeo.</li>
+</ul>
+<div class="tw"><table><thead><tr>
+<th>Tipus de programari</th>
+<th>Funció</th>
+<th>Exemples</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Firmware</td>
+<td>Programari gravat a la placa base que inicialitza el maquinari i
+        arrenca el sistema operatiu.</td>
+<td>BIOS, UEFI</td>
+</tr>
+<tr>
+<td>Programari de base (de sistema)</td>
+<td>Gestiona el maquinari i ofereix serveis als altres programes.</td>
+<td>Sistema operatiu, drivers, utilitats del sistema</td>
+</tr>
+<tr>
+<td>Programari d’aplicació</td>
+<td>Resol tasques de l’usuari.</td>
+<td>Navegador, ofimàtica, editor d’imatges</td>
+</tr>
+<tr>
+<td>Programari de desenvolupament</td>
+<td>Serveix per crear altres programes.</td>
+<td>Compiladors, editors de codi</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c1-h3">3. Dades</h3>
+<p>Les dades són la informació que els programes utilitzen i processen.</p>
+<p>Exemples:</p>
+<ul>
+<li>Documents.</li>
+<li>Fotografies.</li>
+<li>Vídeos.</li>
+<li>Bases de dades.</li>
+<li>Fitxers de configuració.</li>
+</ul>
+<h3 id="c1-h4">4. Persones</h3>
+<p>També formen part del sistema les persones que l’utilitzen, l’administren o
+  el desenvolupen: usuari final, tècnic de sistemes, programador.</p>
+<h2 id="c1-2">1.2 Model general d’un sistema informàtic</h2>
+<div class="code"><pre>        USUARI
+          |
+     APLICACIONS
+          |
+   SISTEMA OPERATIU
+          |
+       DRIVERS
+          |
+      MAQUINARI</pre></div>
+<p>El sistema operatiu és l’element intermedi que permet que les aplicacions
+  utilitzin el maquinari sense haver de conèixer els detalls interns dels
+  components.</p>
+<details class="more" data-h2="1"><summary><span class="more-tag">Per saber-ne més</span> 1.3 L’arquitectura de Von Neumann</summary><div class="more-body">
+<p><em>Per saber-ne més. No cal per fer les sessions.</em></p>
+<p>Gairebé tots els ordinadors actuals segueixen l’arquitectura proposada per
+  John von Neumann el 1945: <strong>les instruccions dels programes i les dades
+  es guarden a la mateixa memòria</strong>, i el processador les va llegint una
+  rere l’altra.</p>
+<div class="tw"><table><thead><tr>
+<th>Bloc</th>
+<th>Funció</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Unitat central de procés (CPU)</td>
+<td>Executa les instruccions. Conté la unitat de control (interpreta i
+        coordina), la unitat aritmeticològica o ALU (fa els càlculs i les
+        comparacions) i els registres (petites memòries internes ultraràpides).</td>
+</tr>
+<tr>
+<td>Memòria principal</td>
+<td>Guarda els programes i les dades que s’estan utilitzant.</td>
+</tr>
+<tr>
+<td>Unitats d’entrada i sortida</td>
+<td>Comuniquen l’ordinador amb l’exterior: teclat, pantalla, discos,
+        xarxa.</td>
+</tr>
+<tr>
+<td>Busos</td>
+<td>Camins que transporten dades, adreces i senyals de control entre els
+        blocs.</td>
+</tr>
+</tbody>
+</table></div>
+
+</div></details><h2 id="c1-3">1.4 CPU · El cervell del sistema</h2>
+<h3 id="c1-h5">Què és la CPU?</h3>
+<p>La CPU (<strong>Central Processing Unit</strong>) és el component encarregat
+  d’executar les instruccions dels programes.</p>
+<p>Cada vegada que obrim una aplicació, el processador executa milions d’ordres
+  internes.</p>
+<h3 id="c1-h6">Com treballa una CPU?</h3>
+<p>El funcionament bàsic segueix tres fases:</p>
+<ol>
+<li><strong>Fetch:</strong> la CPU obté la següent instrucció de la memòria.
+  </li>
+<li><strong>Decode:</strong> interpreta què significa aquesta instrucció.</li>
+<li><strong>Execute:</strong> realitza l’operació corresponent.</li>
+</ol>
+<p>Aquest cicle es repeteix milers de milions de vegades per segon.</p>
+<h3 id="c1-h7">Conceptes importants d’un processador</h3>
+<div class="tw"><table><thead><tr>
+<th>Concepte</th>
+<th>Explicació</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Nucli (Core)</td>
+<td>Unitat independent de processament dins del processador.</td>
+</tr>
+<tr>
+<td>Fil d’execució (Thread)</td>
+<td>Seqüència d’instruccions que pot gestionar un nucli. Amb
+        Hyper-Threading (Intel) o SMT (AMD), cada nucli físic es presenta com a
+        dos processadors lògics: un processador de 4 nuclis i 8 fils mostra 8
+        CPU a lscpu.</td>
+</tr>
+<tr>
+<td>Freqüència</td>
+<td>Nombre de cicles que pot realitzar per segon (GHz). No és l’únic
+        indicador de rendiment.</td>
+</tr>
+<tr>
+<td>Memòria cau</td>
+<td>Memòria molt ràpida situada dins del processador (nivells L1, L2,
+        L3).</td>
+</tr>
+<tr>
+<td>Arquitectura</td>
+<td>x86-64 (amd64) als PC; ARM (aarch64) als mòbils i alguns portàtils.
+        Un sistema operatiu s’ha de fer per a l’arquitectura on s’executa.</td>
+</tr>
+<tr>
+<td>Extensions de virtualització</td>
+<td>VT-x (Intel) i AMD-V (AMD) permeten executar màquines virtuals de
+        manera eficient.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c1-h8">Exemple · Interpretar lscpu</h3>
+<div class="code"><pre>CPU(s):              8
+Thread(s) per core:  2
+Core(s) per socket:  4
+Virtualization:      VT-x</pre></div>
+<p>L’equip té 4 nuclis físics amb 2 fils cadascun (8 CPU lògiques) i admet
+  virtualització per maquinari.</p>
+<h3 id="c1-h9">Pregunta professional</h3>
+<p>Un ordinador A té:</p>
+<ul>
+<li>8 nuclis.</li>
+<li>16 GB de RAM.</li>
+</ul>
+<p>Un ordinador B té:</p>
+<ul>
+<li>16 nuclis.</li>
+<li>4 GB de RAM.</li>
+</ul>
+<p>Quin equip podria funcionar millor com a servidor de màquines virtuals?
+  Justifica la resposta.</p>
+
+<h2 id="c1-4">1.5 Memòria RAM</h2>
+<p>La memòria RAM és l’espai temporal on el sistema operatiu carrega els
+  programes que s’estan executant.</p>
+<p>És una memòria:</p>
+<ul>
+<li><strong>Ràpida:</strong> permet accedir a dades molt ràpidament.</li>
+<li><strong>Volàtil:</strong> perd la informació quan apaguem l’ordinador.
+  </li>
+</ul>
+<h3 id="c1-h10">Exemple</h3>
+<p>Quan obrim un navegador:</p>
+<ol>
+<li>El navegador està guardat al disc.</li>
+<li>El sistema operatiu el copia a la RAM.</li>
+<li>La CPU executa les instruccions.</li>
+</ol>
+<h3 id="c1-h11">Memòria virtual</h3>
+<p>Quan no hi ha prou RAM disponible, el sistema operatiu pot utilitzar part del
+  disc com a memòria auxiliar.</p>
+<p>Aquesta tècnica s’anomena:</p>
+<p><strong>Memòria virtual o swap.</strong></p>
+<p>A Windows s’anomena <strong>fitxer de paginació</strong> (pagefile.sys). Com
+  que el disc és molt més lent que la RAM, quan un equip comença a fer-la servir
+  intensament es nota de seguida.</p>
+<p>Pensa en l’oficina: quan la taula és plena, deixes alguns papers a l’armari i
+  has d’anar a buscar-los cada vegada que els necessites. La feina continua,
+  però molt més lenta.</p>
+<h3 id="c1-h12">La jerarquia de memòria</h3>
+<p>Com més a prop de la CPU, més ràpida, més petita i més cara és la memòria.</p>
+<div class="tw"><table><thead><tr>
+<th>Nivell</th>
+<th>Capacitat típica</th>
+<th>Temps d’accés aproximat</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Registres</td>
+<td>Bytes</td>
+<td>&lt; 1 ns</td>
+</tr>
+<tr>
+<td>Memòria cau L1–L3</td>
+<td>KB a desenes de MB</td>
+<td>1–10 ns</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>8–64 GB</td>
+<td>≈ 100 ns</td>
+</tr>
+<tr>
+<td>SSD NVMe</td>
+<td>256 GB – 4 TB</td>
+<td>≈ 0,1 ms (100 000 ns)</td>
+</tr>
+<tr>
+<td>Disc dur (HDD)</td>
+<td>1–20 TB</td>
+<td>≈ 10 ms (10 000 000 ns)</td>
+</tr>
+</tbody>
+</table></div>
+<p class="callout key"><strong>Recorda:</strong> un HDD és unes cent mil vegades més lent que la RAM
+  a l’hora d’accedir a una dada.</p>
+
+<h2 id="c1-5">1.6 Emmagatzematge</h2>
+<p>Els dispositius d’emmagatzematge permeten conservar informació encara que
+  apaguem l’equip.</p>
+<div class="tw"><table><thead><tr>
+<th>Dispositiu</th>
+<th>Característiques</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>HDD</td>
+<td>Disc mecànic amb plats magnètics. Barat per GB, però lent i sensible
+        als cops.</td>
+</tr>
+<tr>
+<td>SSD SATA</td>
+<td>Memòria flash més ràpida que un HDD (fins a uns 550 MB/s).</td>
+</tr>
+<tr>
+<td>SSD NVMe</td>
+<td>SSD connectat directament al bus PCI Express (pot superar els
+        3000 MB/s).</td>
+</tr>
+<tr>
+<td>Emmagatzematge extern</td>
+<td>Memòries USB, targetes SD i discos externs, que sovint s’han de
+        llegir des de sistemes operatius diferents.</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c1-h13">Conceptes importants</h3>
+<ul>
+<li><strong>Sector:</strong> unitat física mínima de lectura i escriptura
+    del disc (512 bytes o 4 KiB).</li>
+<li><strong>Bloc:</strong> unitat mínima que el sistema d’arxius assigna a un
+    fitxer (sovint 4 KiB).</li>
+<li><strong>Partició:</strong> divisió lògica d’un disc.</li>
+<li><strong>Volum:</strong> espai amb un sistema d’arxius que el sistema
+    operatiu pot fer servir (una lletra d’unitat o un punt de muntatge).</li>
+<li><strong>Sistema d’arxius:</strong> manera d’organitzar els fitxers dins
+    d’un volum (apartat 8).</li>
+</ul>
+<h2 id="c1-6">1.7 Perifèrics</h2>
+<div class="tw"><table><thead><tr>
+<th>Tipus</th>
+<th>Exemples</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Entrada</td>
+<td>Teclat, ratolí, escàner, micròfon, càmera.</td>
+</tr>
+<tr>
+<td>Sortida</td>
+<td>Pantalla, impressora, altaveus.</td>
+</tr>
+<tr>
+<td>Entrada i sortida</td>
+<td>Discos, pantalla tàctil, targeta de xarxa, memòria USB.</td>
+</tr>
+<tr>
+<td>Connexions</td>
+<td>PCI Express (targetes i SSD NVMe), SATA (discos), USB (perifèrics
+        externs), HDMI i DisplayPort (vídeo).</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c1-7">1.8 Maquinari físic i maquinari virtual</h2>
+<p>Al projecte treballarem amb l’equip Linux de l’aula i amb una màquina
+  virtual Windows 11. La màquina virtual veu un <strong>maquinari
+  simulat</strong> que VirtualBox li presenta: un processador amb els nuclis que
+  li hem assignat, una quantitat de RAM limitada, un disc que en realitat és un
+  fitxer (.vdi) i una targeta de xarxa virtual. Per això Windows mostrarà menys
+  nuclis i menys RAM que Linux, encara que tots dos s’executin al mateix
+  ordinador. Comparar-los ajuda a entendre què és un recurs i qui
+  l’administra.</p>
+<h2 id="c1-8">1.9 Com consultar el maquinari</h2>
+<div class="tw"><table><thead><tr>
+<th>Informació</th>
+<th>Linux (sense ser administrador)</th>
+<th>Windows</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Processador</td>
+<td>lscpu · nproc · cat /proc/cpuinfo</td>
+<td>Administrador de tasques › Rendiment · msinfo32</td>
+</tr>
+<tr>
+<td>Memòria</td>
+<td>free -h · cat /proc/meminfo</td>
+<td>Administrador de tasques › Memòria</td>
+</tr>
+<tr>
+<td>Discos i particions</td>
+<td>lsblk · df -h</td>
+<td>Gestió de discs (diskmgmt.msc)</td>
+</tr>
+<tr>
+<td>Sistema operatiu</td>
+<td>hostnamectl · cat /etc/os-release · uname -r</td>
+<td>winver · systeminfo</td>
+</tr>
+<tr>
+<td>Firmware</td>
+<td>ls /sys/firmware/efi (si existeix: UEFI)</td>
+<td>msinfo32 › Mode de BIOS</td>
+</tr>
+<tr>
+<td>Dispositius</td>
+<td>lspci · lsusb</td>
+<td>Administrador de dispositius (devmgmt.msc)</td>
+</tr>
+</tbody>
+</table></div>
+<section class="dossier"><h3 id="c1-h14">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Quins són els elements d’un sistema informàtic? Posa un exemple de
+    cadascun relacionat amb l’aula.</li>
+<li>Per què diem que la RAM és volàtil? Quina conseqüència té per a
+    l’usuari?</li>
+<li>Un processador té 6 nuclis i 12 fils. Quantes CPU mostrarà lscpu? Per
+    què?</li>
+<li>Ordena de més ràpid a més lent: SSD NVMe, registres, RAM, HDD, memòria
+    cau.</li>
+<li>Quina diferència hi ha entre el firmware i el sistema operatiu?</li>
+<li>Què creus que passa si assignes 2 GB de RAM a una VM i dins la VM obres
+    moltes aplicacions?</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="1"><h2 id="c1-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c1" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c2" data-sess="s1" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 1 · Radiografia del sistema</span><span class="ca-chip">CA1.1</span></p>
+  <h1><span class="num">2</span> Què és un sistema operatiu?</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>El sistema operatiu és el gerent de l’oficina. No fa la feina de cada
+  programa, però decideix qui treballa, quina part de la taula li toca i qui pot
+  obrir cada armari. Sense gerent, cada programa hauria de saber com funciona
+  cada peça del maquinari.</p><p class="matters"><strong>Per què t’importa?</strong> Quan a l’institut no pots instal·lar un
+  programa, és el sistema operatiu qui t’ho impedeix, perquè el teu usuari no és
+  administrador.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c2-1">Exemples de sistemes operatius</a></li><li><a href="#c2-2">2.1 Funcions principals d’un sistema operatiu</a></li><li><a href="#c2-3">2.2 Arquitectura bàsica d’un sistema operatiu</a></li><li><a href="#c2-4">2.3 Tipus de sistemes operatius</a></li></ol></nav>
+
+
+<p>El sistema operatiu és el programari principal d’un ordinador. La seva funció
+  és administrar tots els recursos del sistema i permetre que els usuaris i
+  aplicacions puguin utilitzar el maquinari.</p>
+<p>Sense un sistema operatiu, un ordinador seria simplement un conjunt de
+  components electrònics sense una manera senzilla d’utilitzar-los.</p>
+<p>El sistema operatiu fa dos papers alhora: és un <strong>administrador de
+  recursos</strong> (decideix qui fa servir la CPU, la memòria o el disc i quan)
+  i una <strong>màquina estesa</strong> (amaga la complexitat del maquinari i
+  ofereix operacions senzilles com «obre un fitxer»).</p>
+<h2 id="c2-1">Exemples de sistemes operatius</h2>
+<ul>
+<li><strong>Windows 11:</strong> sistema operatiu d’escriptori utilitzat
+    principalment en equips personals i empreses.</li>
+<li><strong>Ubuntu Linux:</strong> sistema basat en Linux molt utilitzat en
+    servidors i entorns professionals.</li>
+<li><strong>macOS:</strong> sistema operatiu dels equips Apple.</li>
+<li><strong>Android:</strong> sistema operatiu mòbil basat en Linux.</li>
+</ul>
+<h2 id="c2-2">2.1 Funcions principals d’un sistema operatiu</h2>
+<div class="tw"><table><thead><tr>
+<th>Funció</th>
+<th>Explicació</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Gestió del processador</td>
+<td>Decideix quin programa utilitza la CPU i durant quant temps.</td>
+</tr>
+<tr>
+<td>Gestió de memòria</td>
+<td>Assigna i allibera memòria RAM als programes i impedeix que un
+        programa llegeixi la memòria d’un altre.</td>
+</tr>
+<tr>
+<td>Gestió de processos</td>
+<td>Controla els programes que estan executant-se.</td>
+</tr>
+<tr>
+<td>Gestió de dispositius</td>
+<td>Controla impressores, discos, targetes de xarxa i altres components.
+      </td>
+</tr>
+<tr>
+<td>Gestió de fitxers</td>
+<td>Organitza, desa i protegeix la informació.</td>
+</tr>
+<tr>
+<td>Gestió d’usuaris</td>
+<td>Controla identitats i permisos d’accés.</td>
+</tr>
+<tr>
+<td>Seguretat</td>
+<td>Protegeix els recursos del sistema.</td>
+</tr>
+<tr>
+<td>Comunicacions</td>
+<td>Permet la comunicació en xarxa i entre processos.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c2-3">2.2 Arquitectura bàsica d’un sistema operatiu</h2>
+<p>El sistema operatiu està format per diferents capes.</p>
+<div class="code"><pre>Aplicacions                    } mode usuari
+     |
+Biblioteques del sistema       }
+     |
+---- crides al sistema ----
+     |
+Kernel                         } mode nucli
+     |
+Drivers                        }
+     |
+Maquinari</pre></div>
+<h3 id="c2-h1">El Kernel</h3>
+<p>El kernel és el nucli del sistema operatiu. És la part que té comunicació
+  directa amb el maquinari.</p>
+<p>Les seves funcions principals són:</p>
+<ul>
+<li>Controlar la CPU.</li>
+<li>Gestionar la memòria.</li>
+<li>Crear i finalitzar processos.</li>
+<li>Controlar dispositius.</li>
+<li>Gestionar permisos.</li>
+</ul>
+<h3 id="c2-h2">Mode usuari i mode nucli</h3>
+<p>El kernel s’executa amb tots els privilegis del processador (<strong>mode
+  nucli</strong>). Els programes normals s’executen amb privilegis limitats
+  (<strong>mode usuari</strong>). Quan un programa necessita una cosa que només
+  pot fer el nucli (llegir un fitxer, enviar dades per la xarxa), fa una
+  <strong>crida al sistema</strong>: el processador canvia temporalment a mode
+  nucli, el nucli fa la feina i retorna el resultat.</p>
+<p>A l’oficina passa igual: els treballadors no poden entrar a la sala de
+  màquines. Li demanen al gerent, que és l’únic que hi té accés. Així, si un
+  programa s’equivoca, no pot espatllar el maquinari ni tocar la feina dels
+  altres.</p>
+<details class="more"><summary><span class="more-tag">Per saber-ne més</span> Tipus de kernel</summary><div class="more-body">
+<p><em>Per saber-ne més. No cal per fer les sessions.</em></p>
+<div class="tw"><table><thead><tr>
+<th>Tipus</th>
+<th>Descripció</th>
+<th>Exemples</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Monolític</td>
+<td>Tots els serveis del nucli s’executen en mode nucli en un sol bloc.
+        Molt ràpid; un error en un driver pot afectar tot el sistema.</td>
+<td>Linux (monolític modular: pot carregar i descarregar mòduls)</td>
+</tr>
+<tr>
+<td>Micronucli</td>
+<td>El nucli només fa el mínim; la resta són serveis en mode usuari. Més
+        robust, una mica més lent.</td>
+<td>MINIX 3, QNX</td>
+</tr>
+<tr>
+<td>Híbrid</td>
+<td>Combina els dos enfocaments.</td>
+<td>Windows 10 i 11, macOS</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><h3 id="c2-h3">Drivers o controladors</h3>
+<p>Un driver és un programa que permet al sistema operatiu comunicar-se amb un
+  dispositiu concret.</p>
+<p>Exemples:</p>
+<ul>
+<li>Driver de la targeta gràfica.</li>
+<li>Driver de la impressora.</li>
+<li>Driver de la targeta WiFi.</li>
+</ul>
+<p>Sense el driver correcte, el sistema operatiu pot no reconèixer correctament
+  un component.</p>
+<h2 id="c2-4">2.3 Tipus de sistemes operatius</h2>
+<p>El RA1 demana classificar els sistemes operatius i relacionar-los amb el seu
+  camp d’aplicació.</p>
+<div class="tw"><table><thead><tr>
+<th>Criteri</th>
+<th>Tipus</th>
+<th>Explicació</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Nombre d’usuaris</td>
+<td>Monousuari / multiusuari</td>
+<td>Un sistema multiusuari distingeix diversos usuaris amb dades i
+        permisos propis (Linux, Windows). MS-DOS era monousuari.</td>
+</tr>
+<tr>
+<td>Nombre de tasques</td>
+<td>Monotasca / multitasca</td>
+<td>Un sistema multitasca executa diversos processos repartint la CPU.
+        Tots els sistemes actuals ho són.</td>
+</tr>
+<tr>
+<td>Nombre de processadors</td>
+<td>Monoprocessador / multiprocessador</td>
+<td>Un sistema multiprocessador aprofita diversos nuclis o CPU.</td>
+</tr>
+<tr>
+<td>Distribució</td>
+<td>Monolloc / en xarxa / distribuït</td>
+<td>Monolloc: gestiona un sol equip (el que estudia aquest mòdul). En
+        xarxa: ofereix serveis a altres equips. Distribuït: diversos equips es
+        comporten com un de sol.</td>
+</tr>
+<tr>
+<td>Temps de resposta</td>
+<td>Propòsit general / temps real</td>
+<td>Un sistema de temps real garanteix una resposta dins d’un termini
+        (control industrial, frens ABS).</td>
+</tr>
+<tr>
+<td>Camp d’aplicació</td>
+<td>Escriptori, servidor, mòbil, encastat, núvol</td>
+<td>Segons el dispositiu i l’ús.</td>
+</tr>
+<tr>
+<td>Llicència</td>
+<td>Lliure / propietari</td>
+<td>Lliure: es pot usar, estudiar, modificar i redistribuir (Linux).
+        Propietari: l’ús està limitat per una llicència (Windows, macOS).</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c2-h4">Sistemes operatius actuals</h3>
+<div class="tw"><table><thead><tr>
+<th>Sistema</th>
+<th>Tipus i camp d’aplicació</th>
+<th>Llicència</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Windows 11</td>
+<td>Escriptori, multiusuari, multitasca</td>
+<td>Propietària</td>
+</tr>
+<tr>
+<td>Ubuntu Desktop</td>
+<td>Escriptori, multiusuari, multitasca</td>
+<td>Lliure</td>
+</tr>
+<tr>
+<td>Windows Server, Ubuntu Server, Red Hat Enterprise Linux</td>
+<td>Servidor, en xarxa</td>
+<td>Propietària / lliure</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td>Escriptori (només en maquinari Apple)</td>
+<td>Propietària</td>
+</tr>
+<tr>
+<td>Android</td>
+<td>Mòbil (nucli Linux)</td>
+<td>Majoritàriament lliure, amb components propietaris</td>
+</tr>
+<tr>
+<td>iOS / iPadOS</td>
+<td>Mòbil</td>
+<td>Propietària</td>
+</tr>
+<tr>
+<td>FreeRTOS, Zephyr</td>
+<td>Encastat, temps real</td>
+<td>Lliure</td>
+</tr>
+<tr>
+<td>ChromeOS</td>
+<td>Escriptori lleuger orientat al núvol</td>
+<td>Propietària (basat en Linux)</td>
+</tr>
+</tbody>
+</table></div>
+<details class="more" data-h2="1"><summary><span class="more-tag">Per saber-ne més</span> 2.4 Breu història</summary><div class="more-body">
+<p><em>Per saber-ne més. No cal per fer les sessions.</em></p>
+<div class="tw"><table><thead><tr>
+<th>Època</th>
+<th>Fita</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>1950–60</td>
+<td>Processament per lots: els treballs s’executen un rere l’altre, sense
+        interacció.</td>
+</tr>
+<tr>
+<td>1960–70</td>
+<td>Multiprogramació i temps compartit. Neix UNIX (1969).</td>
+</tr>
+<tr>
+<td>1980</td>
+<td>Ordinadors personals: MS-DOS (línia d’ordres). El Macintosh (1984)
+        popularitza la interfície gràfica.</td>
+</tr>
+<tr>
+<td>1991</td>
+<td>Linus Torvalds publica el nucli Linux, que amb les eines GNU forma un
+        sistema lliure.</td>
+</tr>
+<tr>
+<td>1993–2001</td>
+<td>Windows NT introdueix el nucli modern de Windows; Windows XP (2001)
+        l’estén a l’àmbit domèstic.</td>
+</tr>
+<tr>
+<td>2007–2008</td>
+<td>iPhone (iOS) i Android: el sistema operatiu mòbil esdevé
+        majoritari.</td>
+</tr>
+<tr>
+<td>2021</td>
+<td>Windows 11 exigeix UEFI, Secure Boot i TPM 2.0.</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><section class="dossier"><h3 id="c2-h5">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Explica amb un exemple quotidià les dues funcions del sistema operatiu:
+    administrador de recursos i màquina estesa.</li>
+<li>Què és una crida al sistema i per què cal?</li>
+<li>Per què un error en un driver pot bloquejar un sistema amb nucli
+    monolític?</li>
+<li>Classifica Windows 11, Android i el sistema d’un rentaplats segons tres
+    criteris de la taula 2.3.</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="2"><h2 id="c2-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c2" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c3" data-sess="s1" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 1 · Radiografia del sistema</span><span class="ca-chip">CA1.1</span></p>
+  <h1><span class="num">3</span> Interfície gràfica i terminal</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>Pots parlar amb el gerent de l’oficina de dues maneres. Pots assenyalar coses
+  amb el dit (la interfície gràfica, amb finestres i ratolí) o li pots escriure
+  notes molt precises (el terminal). En tots dos casos li demanes el mateix al
+  sistema operatiu.</p><p class="matters"><strong>Per què t’importa?</strong> Als equips de l’aula, i a qualsevol
+  servidor, moltes tasques només es poden fer, o es fan molt més de pressa,
+  escrivint ordres al terminal.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c3-1">3.1 GUI · Graphical User Interface</a></li><li><a href="#c3-2">3.2 CLI · Command Line Interface</a></li><li><a href="#c3-3">3.3 Primeres passes amb el terminal</a></li></ol></nav>
+
+
+<p>Un sistema operatiu ofereix diferents formes de comunicació amb l’usuari.</p>
+<h2 id="c3-1">3.1 GUI · Graphical User Interface</h2>
+<p>La interfície gràfica permet interactuar amb l’ordinador mitjançant elements
+  visuals.</p>
+<p>Utilitza:</p>
+<ul>
+<li>Finestres.</li>
+<li>Icones.</li>
+<li>Menús.</li>
+<li>Botons.</li>
+<li>Ratolí.</li>
+</ul>
+<p>Exemple:</p>
+<p>Quan obrim l’explorador de fitxers de Windows estem utilitzant una GUI.</p>
+<h2 id="c3-2">3.2 CLI · Command Line Interface</h2>
+<p>La línia d’ordres permet comunicar-nos amb el sistema escrivint ordres.</p>
+<p>És especialment important per als administradors de sistemes perquè permet
+  automatitzar tasques i gestionar equips remotament.</p>
+<h3 id="c3-h1">Exemples Linux Ubuntu</h3>
+<div class="code"><pre>ls       Mostra el contingut d'un directori.
+pwd      Mostra la ruta actual.
+mkdir    Crea un directori.</pre></div>
+<h3 id="c3-h2">Exemples Windows PowerShell</h3>
+<div class="code"><pre>Get-Process    Mostra els processos actius.
+Get-Service    Mostra els serveis del sistema.</pre></div>
+<h3 id="c3-h3">GUI o CLI?</h3>
+<p>Cap de les dues opcions és millor sempre. Depèn de la situació.</p>
+<div class="tw"><table><thead><tr>
+<th>GUI</th>
+<th>CLI</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Més fàcil per a usuaris novells.</td>
+<td>Més ràpida per administradors.</td>
+</tr>
+<tr>
+<td>Molt visual.</td>
+<td>Permet automatització.</td>
+</tr>
+<tr>
+<td>Consumeix més recursos.</td>
+<td>Consumeix pocs recursos.</td>
+</tr>
+<tr>
+<td>Difícil de repetir exactament.</td>
+<td>Les ordres queden a l’historial i es poden desar en scripts.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c3-3">3.3 Primeres passes amb el terminal</h2>
+<p>El terminal és una conversa escrita amb el sistema operatiu: tu escrius una
+  ordre, prems Retorn, i el sistema respon. Si l’ordre no és correcta, respon amb
+  un missatge d’error, però no trenca res.</p>
+<h3 id="c3-h4">L’indicador (prompt)</h3>
+<div class="code"><pre>alumne@aula12:~$        Linux: usuari @ equip : carpeta actual ($ = usuari normal, # = root)
+PS C:\Users\alumne&gt;     Windows PowerShell: carpeta actual</pre></div>
+<h3 id="c3-h5">Les parts d’una ordre</h3>
+<div class="code"><pre>chmod   u-w    informe.txt
+│       │      └── argument: sobre què actua
+│       └── opció o paràmetre: com ho ha de fer
+└── nom de l’ordre: què vull fer</pre></div>
+<p>Moltes ordres de Linux són abreviatures de paraules angleses: <code>ls</code>
+  = list, <code>cd</code> = change directory, <code>cp</code> = copy,
+  <code>mv</code> = move, <code>rm</code> = remove, <code>chmod</code> = change
+  mode. Si recordes la paraula, recordes l’ordre.</p>
+<h3 id="c3-h6">Per què el terminal diu «Permission denied»?</h3>
+<p>Cada ordre s’executa amb la identitat de l’usuari que l’escriu. Si aquest
+  usuari no té permís per fer una acció, el sistema operatiu la bloqueja. Al
+  projecte veuràs aquest missatge sovint a l’equip de l’aula: és el sistema
+  operatiu fent la seva feina de protecció.</p>
+<section class="dossier"><h3 id="c3-h7">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Dona dos motius pels quals un tècnic de sistemes ha de dominar la línia
+    d’ordres encara que existeixi la interfície gràfica.</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="3"><h2 id="c3-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c3" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c4" data-sess="s1" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 1 · Radiografia del sistema</span><span class="ca-chip">CA1.2</span></p>
+  <h1><span class="num">4</span> Com representa la informació un ordinador?</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>A l’oficina de l’ordinador tot s’escriu amb només dos símbols: 0 i 1, com un
+  interruptor apagat o encès. Amb grups d’aquests símbols es guarden nombres,
+  lletres, colors i permisos. El binari és molt llarg de llegir, i per això els
+  tècnics fan servir l’hexadecimal, que és una manera curta d’escriure el
+  mateix.</p><p class="matters"><strong>Per què t’importa?</strong> Quan compres un disc d’1 TB i l’ordinador
+  diu que només té uns 931 GB, entendre les unitats t’explica que ningú no t’ha
+  enganyat.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c4-1">4.1 Bit i Byte</a></li><li><a href="#c4-2">4.2 Sistemes numèrics</a></li><li><a href="#c4-3">4.3 Sistema decimal</a></li><li><a href="#c4-4">4.4 Sistema binari</a></li><li><a href="#c4-5">4.5 Sistema hexadecimal</a></li><li><a href="#c4-6">4.6 Representació de text</a></li><li><a href="#c4-7">4.7 Capacitats d’emmagatzematge</a></li><li><a href="#c4-8">4.8 La representació binària en la feina d’un tècnic</a></li></ol></nav>
+
+
+<p>Els ordinadors només poden treballar directament amb dos estats:</p>
+<ul>
+<li>0</li>
+<li>1</li>
+</ul>
+<p>Aquests dos valors representen el sistema binari. Tota la informació
+  (nombres, text, imatges, permisos) s’acaba codificant en binari.</p>
+<h2 id="c4-1">4.1 Bit i Byte</h2>
+<p>Un bit és la unitat mínima d’informació.</p>
+<p>Pot tenir dos valors: <strong>0</strong> o <strong>1</strong>.</p>
+<p>Un conjunt de 8 bits forma un byte.</p>
+<div class="code"><pre>10101100  =  8 bits  =  1 byte</pre></div>
+<p>Un byte pot representar 256 valors diferents (de 0 a 255). Amb n bits es
+  poden representar 2<sup>n</sup> valors.</p>
+<h2 id="c4-2">4.2 Sistemes numèrics</h2>
+<p>En un sistema posicional, el valor d’una xifra depèn de la seva posició.
+  Cada posició val la base elevada a un exponent que comença per 0 a la
+  dreta.</p>
+<div class="tw"><table><thead><tr>
+<th>Sistema</th>
+<th>Base</th>
+<th>Símbols</th>
+<th>Ús en informàtica</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Decimal</td>
+<td>10</td>
+<td>0-9</td>
+<td>Ús humà.</td>
+</tr>
+<tr>
+<td>Binari</td>
+<td>2</td>
+<td>0-1</td>
+<td>Llenguatge intern del maquinari.</td>
+</tr>
+<tr>
+<td>Octal</td>
+<td>8</td>
+<td>0-7</td>
+<td>Permisos de Linux (chmod 750).</td>
+</tr>
+<tr>
+<td>Hexadecimal</td>
+<td>16</td>
+<td>0-9 i A-F</td>
+<td>Adreces de memòria, colors web, adreces MAC, IPv6.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c4-3">4.3 Sistema decimal</h2>
+<p>És el sistema que utilitzem habitualment.</p>
+<p>Té 10 símbols:</p>
+<div class="code"><pre>0 1 2 3 4 5 6 7 8 9</pre></div>
+<div class="code"><pre>347 = 3×100 + 4×10 + 7×1</pre></div>
+<h2 id="c4-4">4.4 Sistema binari</h2>
+<p>El sistema binari utilitza només dos símbols.</p>
+<p>Cada posició representa una potència de 2.</p>
+<div class="tw"><table><thead><tr>
+<th>Valor</th>
+<th>8</th>
+<th>4</th>
+<th>2</th>
+<th>1</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>1011</td>
+<td>1</td>
+<td>0</td>
+<td>1</td>
+<td>1</td>
+</tr>
+</tbody>
+</table></div>
+<p>Per tant:</p>
+<div class="code"><pre>1011 = 8 + 0 + 2 + 1 = 11 decimal</pre></div>
+<h3 id="c4-h1">De binari a decimal</h3>
+<p>Es multiplica cada bit pel pes de la seva posició i se sumen els
+  resultats.</p>
+<div class="code"><pre>Pesos:  128  64  32  16   8   4   2   1
+Bits:     1   0   1   1   0   1   0   1
+128 + 32 + 16 + 4 + 1 = 181</pre></div>
+<h3 id="c4-h2">De decimal a binari</h3>
+<p>Hi ha dos mètodes i tots dos donen el mateix resultat. Fes servir el que
+  t’entri millor.</p>
+<h4>Mètode de la taula de pesos (el més fàcil)</h4>
+<p>Escriu els pesos d’un byte: 128, 64, 32, 16, 8, 4, 2 i 1. Comença per
+  l’esquerra i, per a cada pes, pregunta’t: «hi cap en el que em queda?»</p>
+<ul>
+<li>Si hi cap, escriu un <strong>1</strong> i resta’l.</li>
+<li>Si no hi cap, escriu un <strong>0</strong> i passa al pes següent.</li>
+</ul>
+<p>Exemple: passem 180 a binari.</p>
+<div class="tw"><table><thead><tr>
+<th>Pes</th>
+<th>Hi cap?</th>
+<th>Bit</th>
+<th>Em queda</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>128</td>
+<td>Sí: 180 − 128 = 52</td>
+<td>1</td>
+<td>52</td>
+</tr>
+<tr>
+<td>64</td>
+<td>No: 52 és més petit que 64</td>
+<td>0</td>
+<td>52</td>
+</tr>
+<tr>
+<td>32</td>
+<td>Sí: 52 − 32 = 20</td>
+<td>1</td>
+<td>20</td>
+</tr>
+<tr>
+<td>16</td>
+<td>Sí: 20 − 16 = 4</td>
+<td>1</td>
+<td>4</td>
+</tr>
+<tr>
+<td>8</td>
+<td>No: 4 és més petit que 8</td>
+<td>0</td>
+<td>4</td>
+</tr>
+<tr>
+<td>4</td>
+<td>Sí: 4 − 4 = 0</td>
+<td>1</td>
+<td>0</td>
+</tr>
+<tr>
+<td>2 i 1</td>
+<td>No: ja no queda res</td>
+<td>0 0</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<div class="code"><pre>Pesos:  128  64  32  16   8   4   2   1
+Bits:     1   0   1   1   0   1   0   0
+180 = 10110100   (comprovació: 128 + 32 + 16 + 4 = 180)</pre></div>
+<p class="callout why"><strong>Per què funciona?</strong> Cada pes val el doble que el de la seva
+  dreta, com si tinguessis un bitllet de cada valor: 128, 64, 32... Fent servir
+  cada bitllet com a molt una vegada, pots pagar qualsevol quantitat de 0 a 255.
+  L’1 vol dir «faig servir aquest bitllet» i el 0, «no el faig servir».</p>
+<h4>Mètode de les divisions successives</h4>
+<p>Es divideix successivament entre 2 i es llegeixen els residus de baix a
+  dalt.</p>
+<div class="code"><pre>45 / 2 = 22  residu 1
+22 / 2 = 11  residu 0
+11 / 2 =  5  residu 1
+ 5 / 2 =  2  residu 1
+ 2 / 2 =  1  residu 0
+ 1 / 2 =  0  residu 1
+Lectura de baix a dalt: 45 = 101101</pre></div>
+<div class="tool" data-tool="bin"></div><h2 id="c4-5">4.5 Sistema hexadecimal</h2>
+<p>El sistema hexadecimal utilitza 16 símbols:</p>
+<div class="code"><pre>0 1 2 3 4 5 6 7 8 9 A B C D E F</pre></div>
+<p>S’utilitza habitualment en informàtica perquè permet representar grups de
+  bits de forma més compacta.</p>
+<p>Exemple:</p>
+<div class="code"><pre>Binari:       11111111
+Hexadecimal:  FF</pre></div>
+<p>Un byte sempre s’escriu amb dues xifres hexadecimals, i és molt més fàcil
+  llegir i copiar «FF» que «11111111».</p>
+<p class="callout why"><strong>On el veuràs?</strong> A l’adreça MAC de la targeta de xarxa (per
+  exemple 08:00:27:4E:66:A1), que surt amb <code>ip a</code> a Linux o amb
+  <code>ipconfig /all</code> a Windows, i als colors de les pàgines web, com
+  #FF8800 (taronja).</p>
+<h3 id="c4-h3">Entre binari i hexadecimal</h3>
+<p>Com que 16 = 2<sup>4</sup>, cada xifra hexadecimal equival exactament a 4
+  bits. Només cal agrupar de 4 en 4 des de la dreta.</p>
+<div class="code"><pre>1011 0101  →  B 5  →  B5
+3F  →  0011 1111  →  63 decimal</pre></div>
+<div class="tw"><table><thead><tr>
+<th>Dec</th>
+<th>Bin</th>
+<th>Hex</th>
+<th>Dec</th>
+<th>Bin</th>
+<th>Hex</th>
+</tr></thead>
+<tbody>
+
+<tr><td>0</td><td>0000</td><td>0</td><td>8</td><td>1000</td><td>8</td></tr>
+<tr><td>1</td><td>0001</td><td>1</td><td>9</td><td>1001</td><td>9</td></tr>
+<tr><td>2</td><td>0010</td><td>2</td><td>10</td><td>1010</td><td>A</td></tr>
+<tr><td>3</td><td>0011</td><td>3</td><td>11</td><td>1011</td><td>B</td></tr>
+<tr><td>4</td><td>0100</td><td>4</td><td>12</td><td>1100</td><td>C</td></tr>
+<tr><td>5</td><td>0101</td><td>5</td><td>13</td><td>1101</td><td>D</td></tr>
+<tr><td>6</td><td>0110</td><td>6</td><td>14</td><td>1110</td><td>E</td></tr>
+<tr><td>7</td><td>0111</td><td>7</td><td>15</td><td>1111</td><td>F</td></tr>
+</tbody>
+</table></div>
+<h3 id="c4-h4">D’hexadecimal a decimal</h3>
+<div class="code"><pre>2A = 2×16 + 10×1 = 42</pre></div>
+<h3 id="c4-h5">De decimal a hexadecimal</h3>
+<p>Es divideix successivament entre 16 i es llegeixen els residus de baix a
+  dalt (10 = A, 11 = B...).</p>
+<div class="code"><pre>200 / 16 = 12  residu 8
+ 12 / 16 =  0  residu 12 (C)
+200 = C8</pre></div>
+<h2 id="c4-6">4.6 Representació de text</h2>
+<p>Els ordinadors també han de representar lletres i símbols.</p>
+<h3 id="c4-h6">ASCII</h3>
+<p>Sistema antic que assigna un número a cada caràcter. Fa servir 7 bits (128
+  caràcters) i no inclou accents.</p>
+<p>Exemple:</p>
+<div class="code"><pre>A = 65 decimal = 41 hexadecimal
+a = 97 decimal = 61 hexadecimal
+0 = 48 decimal = 30 hexadecimal</pre></div>
+<h3 id="c4-h7">Unicode</h3>
+<p>Sistema actual que permet representar caràcters de pràcticament totes les
+  llengües del món.</p>
+<p>Un dels formats més utilitzats és UTF-8.</p>
+<p>UTF-8 fa servir d’1 a 4 bytes per caràcter i és compatible amb ASCII: «A»
+  ocupa 1 byte (41); «à» n’ocupa 2 (C3 A0); un emoji n’ocupa 4.</p>
+<div class="code"><pre>$ echo -n "Aà" | xxd
+00000000: 41c3 a0        A..</pre></div>
+<h2 id="c4-7">4.7 Capacitats d’emmagatzematge</h2>
+<div class="tw"><table><thead><tr>
+<th>Unitat</th>
+<th>Equivalència</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Byte</td>
+<td>8 bits</td>
+</tr>
+<tr>
+<td>KiB</td>
+<td>1024 bytes</td>
+</tr>
+<tr>
+<td>MiB</td>
+<td>1024 KiB</td>
+</tr>
+<tr>
+<td>GiB</td>
+<td>1024 MiB</td>
+</tr>
+<tr>
+<td>TiB</td>
+<td>1024 GiB</td>
+</tr>
+</tbody>
+</table></div>
+<p>Hi ha dos sistemes de prefixos i la confusió entre tots dos és molt
+  habitual:</p>
+<div class="tw"><table><thead><tr>
+<th>Prefix SI (base 10)</th>
+<th>Valor</th>
+<th>Prefix IEC (base 2)</th>
+<th>Valor</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>kB (quilobyte)</td>
+<td>1 000 bytes</td>
+<td>KiB (kibibyte)</td>
+<td>1 024 bytes</td>
+</tr>
+<tr>
+<td>MB</td>
+<td>1 000 000 bytes</td>
+<td>MiB</td>
+<td>1 048 576 bytes</td>
+</tr>
+<tr>
+<td>GB</td>
+<td>1 000 000 000 bytes</td>
+<td>GiB</td>
+<td>1 073 741 824 bytes</td>
+</tr>
+<tr>
+<td>TB</td>
+<td>10<sup>12</sup> bytes</td>
+<td>TiB</td>
+<td>1024<sup>4</sup> bytes</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c4-h8">Exemple · Un disc de 500 GB</h3>
+<p>El fabricant compta en GB (base 10): 500 × 1 000 000 000 = 500 000 000 000
+  bytes. Molts sistemes operatius mostren GiB (base 2), encara que escriguin
+  «GB»: 500 000 000 000 / 1 073 741 824 ≈ <strong>465,66 GiB</strong>. No falta
+  espai: és la mateixa quantitat en una altra unitat.</p>
+<p class="callout key"><strong>Recorda:</strong> les velocitats de xarxa es mesuren en
+  <strong>bits</strong> per segon (Mbps) i les mides de fitxers en
+  <strong>bytes</strong>. Una connexió de 100 Mbps descarrega com a màxim
+  12,5 MB/s (100 / 8).</p>
+<h3 id="c4-h9">Pregunta de comprensió</h3>
+<p>Un disc SSD indica que té una capacitat de 1 TB.</p>
+<p>Per què quan el connectem a l’ordinador no apareixen exactament 1000 GB
+  disponibles?</p>
+<div class="tool" data-tool="units"></div><h2 id="c4-8">4.8 La representació binària en la feina d’un tècnic</h2>
+<div class="tw"><table><thead><tr>
+<th>Dada</th>
+<th>Exemple</th>
+<th>Lectura</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Color web</td>
+<td>#0F6B70</td>
+<td>Vermell 0F = 15, verd 6B = 107, blau 70 = 112.</td>
+</tr>
+<tr>
+<td>Adreça MAC</td>
+<td>08:00:27:4E:66:A1</td>
+<td>6 bytes en hexadecimal. El prefix 08:00:27 identifica
+        VirtualBox.</td>
+</tr>
+<tr>
+<td>Adreça IPv4</td>
+<td>192.168.1.10</td>
+<td>4 bytes en decimal. 192 = 11000000.</td>
+</tr>
+<tr>
+<td>Permisos Linux</td>
+<td>750</td>
+<td>Tres xifres octals: 7 = 111 (rwx), 5 = 101 (r-x), 0 = 000 (---).</td>
+</tr>
+</tbody>
+</table></div>
+<section class="dossier"><h3 id="c4-h10">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Converteix 200 decimal a binari i a hexadecimal.</li>
+<li>Converteix 1110 0110 binari a decimal i a hexadecimal.</li>
+<li>Quants valors diferents es poden representar amb 10 bits?</li>
+<li>Un fitxer ocupa 3 GiB. Quants bytes són? I en GB (base 10)?</li>
+<li>Quant tardaria, com a mínim, a descarregar-se un fitxer de 600 MB amb una
+    connexió de 50 Mbps?</li>
+<li>Quins bytes ocupa la paraula «Hi» en UTF-8? I «Sí»?</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="4"><h2 id="c4-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c4" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c5" data-sess="s2" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 2 · Processos sota observació</span><span class="ca-chip">CA1.3</span></p>
+  <h1><span class="num">5</span> Què és un procés?</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>Un programa és com una recepta escrita en un llibre: és al disc i no fa res.
+  Un procés és algú cuinant aquesta recepta ara mateix, amb els ingredients a la
+  taula (RAM) i una persona treballant-hi (un nucli de la CPU). El gerent (el
+  sistema operatiu) dona un número a cada feina (el PID) i decideix a qui toca
+  treballar a cada moment.</p><p class="matters"><strong>Per què t’importa?</strong> Quan l’ordinador va lent o una aplicació
+  es penja, l’Administrador de tasques et diu quin procés és el culpable i et
+  deixa aturar-lo.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c5-1">5.1 Programa i procés</a></li><li><a href="#c5-2">5.2 Identificador PID</a></li><li><a href="#c5-3">5.3 Informació d’un procés</a></li><li><a href="#c5-4">5.4 Estats d’un procés</a></li><li><a href="#c5-5">5.5 Planificació i prioritat</a></li><li><a href="#c5-6">5.6 Fils</a></li><li><a href="#c5-7">5.7 Finalitzar processos</a></li><li><a href="#c5-8">5.8 Processos i privilegis</a></li><li><a href="#c5-9">5.9 Consultar processos</a></li></ol></nav>
+
+
+<p>Un dels treballs principals d’un sistema operatiu és gestionar els programes
+  que s’estan executant.</p>
+<p>Per entendre aquest concepte cal diferenciar entre:</p>
+<h2 id="c5-1">5.1 Programa i procés</h2>
+<h3 id="c5-h1">Programa</h3>
+<p>Un programa és un conjunt d’instruccions emmagatzemades en un disc. És un
+  fitxer que encara no s’està executant.</p>
+<p>Exemple:</p>
+<div class="code"><pre>firefox.exe</pre></div>
+<p>Aquest fitxer conté les instruccions necessàries perquè el navegador pugui
+  funcionar.</p>
+<h3 id="c5-h2">Procés</h3>
+<p>Un procés és un programa que està carregat en memòria RAM i s’està executant.
+</p>
+<p>Quan obrim Firefox:</p>
+<ol>
+<li>El sistema operatiu localitza el programa al disc.</li>
+<li>Carrega les instruccions necessàries a la memòria RAM.</li>
+<li>Assigna recursos de CPU.</li>
+<li>Crea un procés.</li>
+</ol>
+<p>Si obrim el mateix programa dues vegades, tindrem dos processos diferents
+  del mateix programa.</p>
+<h2 id="c5-2">5.2 Identificador PID</h2>
+<p>Cada procés té un identificador únic anomenat:</p>
+<h3 id="c5-h3">PID · Process Identifier</h3>
+<p>El PID permet al sistema operatiu saber quin procés està gestionant.</p>
+<p>Exemple:</p>
+<div class="code"><pre>Aplicació: Firefox
+PID:       2548
+Usuari:    alumne
+Memòria:   800 MB
+CPU:       10%</pre></div>
+<p>Cada procés també té un <strong>PPID</strong>, el PID del procés pare que
+  l’ha creat. A Linux, el procés 1 (systemd) és l’avantpassat de tots.</p>
+<h2 id="c5-3">5.3 Informació d’un procés</h2>
+<p>Un sistema operatiu controla molta informació sobre cada procés. La guarda
+  en una estructura anomenada <strong>bloc de control del procés
+  (PCB)</strong>.</p>
+<div class="tw"><table><thead><tr>
+<th>Element</th>
+<th>Descripció</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>PID</td>
+<td>Identificador del procés.</td>
+</tr>
+<tr>
+<td>PPID</td>
+<td>Identificador del procés pare.</td>
+</tr>
+<tr>
+<td>Usuari</td>
+<td>Persona propietària del procés. Determina què pot fer i qui el pot
+        controlar.</td>
+</tr>
+<tr>
+<td>CPU</td>
+<td>Percentatge de processador utilitzat.</td>
+</tr>
+<tr>
+<td>RAM</td>
+<td>Memòria utilitzada.</td>
+</tr>
+<tr>
+<td>Prioritat</td>
+<td>Importància dins del planificador.</td>
+</tr>
+<tr>
+<td>Estat</td>
+<td>Situació actual del procés.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c5-4">5.4 Estats d’un procés</h2>
+<p>Un procés no està sempre executant-se. Pot passar per diferents estats:</p>
+<div class="code"><pre>  Nou
+   |
+   v
+Preparat  &lt;-----------------------+
+   |    ^                         |
+   |    | s'acaba el seu torn     | arriba el que esperava
+   v    |                         |
+Executant-se ---------------&gt; Esperant
+   |         espera un recurs
+   v
+Finalitzat</pre></div>
+<h3 id="c5-h4">Estats principals</h3>
+<ul>
+<li><strong>Nou:</strong> el procés acaba de ser creat.</li>
+<li><strong>Preparat:</strong> espera poder utilitzar la CPU.</li>
+<li><strong>Executant:</strong> la CPU està executant instruccions.</li>
+<li><strong>Esperant:</strong> espera un recurs, com una lectura de disc.</li>
+<li><strong>Finalitzat:</strong> ha acabat la seva execució.</li>
+</ul>
+<h3 id="c5-h5">Estats a Linux (columna STAT de ps)</h3>
+<div class="tw"><table><thead><tr>
+<th>Lletra</th>
+<th>Estat</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>R</td>
+<td>En execució o preparat.</td>
+</tr>
+<tr>
+<td>S</td>
+<td>Dormint, esperant un esdeveniment. És l’estat més habitual.</td>
+</tr>
+<tr>
+<td>D</td>
+<td>Esperant el disc, no es pot interrompre.</td>
+</tr>
+<tr>
+<td>T</td>
+<td>Aturat (per exemple amb Ctrl+Z).</td>
+</tr>
+<tr>
+<td>Z</td>
+<td>Zombi: ha acabat però el pare encara no n’ha recollit el
+        resultat.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Linux fa servir la mateixa lletra R per a «executant-se» i «preparat» perquè
+  un procés salta de l’un a l’altre centenars de vegades per segon. L’estat
+  «nou» tampoc no el veuràs: dura només unes mil·lèsimes de segon.</p>
+<h3 id="c5-h6">Com veure els estats a la pràctica</h3>
+<p>Ho pots provar a l’equip de l’aula sense ser administrador. Crea dos
+  processos: un que treballa sense parar i un altre que només espera.</p>
+<div class="code"><pre>$ yes &gt; /dev/null &amp;        # procés que treballa sense parar
+$ sleep 300 &amp;              # procés que només espera 300 segons
+$ ps -o pid,stat,comm
+  PID STAT COMMAND
+  252 R    yes             ← R: executant-se o preparat
+  253 S    sleep           ← S: esperant (dormint)</pre></div>
+<p><code>ps -o pid,stat,comm</code> vol dir: mostra només les columnes PID,
+  estat (STAT) i nom de l’ordre (COMMAND). La <code>-o</code> ve d’«output»
+  (sortida): tu tries quines columnes vols veure. A la teva pantalla també hi
+  sortiran el teu terminal (bash) i el mateix <code>ps</code>, i els PID seran
+  uns altres.</p>
+<p>Ara prova els altres estats amb el procés <em>yes</em>:</p>
+<ol>
+<li>Engega’l en <strong>primer pla</strong>, sense el <code>&amp;</code>:
+    <code>yes &gt; /dev/null</code>. El terminal queda ocupat.</li>
+<li>Prem <strong>Ctrl+Z</strong>: el procés es posa en pausa. Amb
+    <code>ps -o pid,stat,comm</code> veuràs que STAT és <strong>T</strong>
+    (aturat).</li>
+<li>Escriu <code>bg</code> (de «background», segon pla): el procés continua
+    treballant en segon pla i torna a l’estat <strong>R</strong>.</li>
+<li>Escriu <code>kill PID</code> amb el seu número: el procés acaba
+    (<strong>finalitzat</strong>) i ja no surt a la llista. Fes el mateix amb
+    tots els <em>yes</em> que hagis engegat i amb el <em>sleep</em>, o deixa que
+    el <em>sleep</em> acabi sol als 300 segons.</li>
+</ol>
+<div class="tw"><table><thead><tr>
+<th>Estat (teoria)</th>
+<th>Què veus a ps</th>
+<th>Com l’has provocat</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Executant-se o preparat</td>
+<td>R</td>
+<td><code>yes</code> treballa sense parar.</td>
+</tr>
+<tr>
+<td>Esperant</td>
+<td>S</td>
+<td><code>sleep 300</code> espera que passi el temps.</td>
+</tr>
+<tr>
+<td>Aturat (en pausa)</td>
+<td>T</td>
+<td>Ctrl+Z amb el procés en primer pla.</td>
+</tr>
+<tr>
+<td>Finalitzat</td>
+<td>Ja no apareix</td>
+<td><code>kill PID</code>.</td>
+</tr>
+</tbody>
+</table></div>
+<p><strong>A Windows:</strong> Administrador de tasques › <em>Detalls</em> ›
+  columna <em>Estat</em>. La majoria de processos diuen «En execució». Algunes
+  aplicacions modernes, com la Calculadora, quan les minimitzes poden aparèixer
+  com a «Suspès»: Windows les posa en pausa perquè no gastin CPU mentre no les
+  fas servir.</p>
+<div class="tool" data-tool="proc"></div><h2 id="c5-5">5.5 Planificació i prioritat</h2>
+<p>Com que hi ha molts més processos que processadors, el
+  <strong>planificador</strong> del nucli decideix quin procés s’executa a cada
+  moment. Cada procés rep un petit interval de temps (quàntum) i després el
+  planificador pot passar la CPU a un altre. La sensació és que tot s’executa
+  alhora.</p>
+<ul>
+<li><strong>Linux:</strong> el valor <strong>nice</strong> va de −20
+    (prioritat màxima) a 19 (mínima). El valor per defecte és 0. Un usuari
+    normal només pot <strong>augmentar</strong> el nice dels seus processos
+    (fer-los menys prioritaris).</li>
+<li><strong>Windows:</strong> classes de prioritat (Temps real, Alta, Normal,
+    Baixa...), a la pestanya Detalls de l’Administrador de tasques.</li>
+</ul>
+<h2 id="c5-6">5.6 Fils</h2>
+<p>Un procés pot tenir diversos <strong>fils d’execució</strong> que comparteixen
+  la mateixa memòria. Un navegador pot fer servir un fil per dibuixar la pàgina
+  i un altre per descarregar dades. Els navegadors actuals, a més, fan servir
+  un procés diferent per a cada pestanya: si una pestanya es penja, les altres
+  continuen funcionant.</p>
+<h2 id="c5-7">5.7 Finalitzar processos</h2>
+<div class="tw"><table><thead><tr>
+<th>Senyal</th>
+<th>Número</th>
+<th>Efecte</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>SIGTERM</td>
+<td>15</td>
+<td>Demana al procés que acabi ordenadament (desant dades). És el que
+        envia kill per defecte.</td>
+</tr>
+<tr>
+<td>SIGKILL</td>
+<td>9</td>
+<td>El nucli elimina el procés immediatament; no es pot ignorar. Només
+        com a últim recurs: es poden perdre dades.</td>
+</tr>
+<tr>
+<td>SIGINT</td>
+<td>2</td>
+<td>Interrupció; és el que s’envia amb Ctrl+C.</td>
+</tr>
+</tbody>
+</table></div>
+<p>A Windows, «Finalitza la tasca» primer demana a l’aplicació que es tanqui i,
+  si no respon, la força. Des de la línia d’ordres: <code>taskkill /PID
+  1234</code> i, per forçar-ho, <code>taskkill /PID 1234 /F</code>.</p>
+<h2 id="c5-8">5.8 Processos i privilegis</h2>
+<p>Cada procés pertany a un usuari. <strong>Un usuari normal només pot
+  controlar els seus propis processos.</strong> Per això, a l’equip de
+  l’aula:</p>
+<div class="code"><pre>$ yes &gt; /dev/null &amp;
+[1] 4821
+$ renice -n 10 -p 4821       # baixar la prioritat: permès
+$ renice -n -5 -p 4821       # pujar la prioritat: denegat
+renice: failed to set priority for 4821 (process ID): Permission denied
+$ kill 1                     # aturar systemd (de root): denegat
+bash: kill: (1) - Operation not permitted
+$ kill 4821                  # aturar el procés propi: permès</pre></div>
+<p>Aquests missatges no són errors teus: són la prova que el sistema operatiu
+  protegeix els processos dels altres usuaris i del sistema. Un administrador
+  (root a Linux) sí que podria fer-ho.</p>
+<p>A Windows passa el mateix: si obres un terminal com a usuari estàndard
+  (<code>runas /user:personal cmd</code>) i intentes aturar un procés d’un altre
+  usuari amb <code>taskkill</code>, el sistema respon «Accés denegat». Des d’un
+  terminal d’administrador, en canvi, sí que el pots aturar.</p>
+<h2 id="c5-9">5.9 Consultar processos</h2>
+<h3 id="c5-h7">Ubuntu Linux</h3>
+<div class="code"><pre>ps aux</pre></div>
+<p>Mostra tots els processos del sistema.</p>
+<div class="code"><pre>top</pre></div>
+<p>Mostra processos en temps real (tecla P: ordenar per CPU; tecla M: per
+  memòria).</p>
+<div class="code"><pre>ps -eo pid,ppid,user,stat,ni,%cpu,%mem,comm
+pstree</pre></div>
+<p>Mostra les columnes que triem i l’arbre de processos.</p>
+<h3 id="c5-h8">Windows</h3>
+<p>Administrador de tasques:</p>
+<div class="code"><pre>CTRL + SHIFT + ESC</pre></div>
+<p>PowerShell:</p>
+<div class="code"><pre>Get-Process</pre></div>
+<p>Símbol del sistema:</p>
+<div class="code"><pre>tasklist</pre></div>
+<h3 id="c5-h9">Exemple · Llegir una línia de ps aux</h3>
+<div class="code"><pre>USER    PID  %CPU %MEM STAT COMMAND
+alumne 4821  99.7  0.0 R    yes</pre></div>
+<p>El procés «yes», de l’usuari alumne, està en execució (R) i consumeix gairebé
+  un fil de CPU sencer, però gens de memòria.</p>
+<h3 id="c5-h10">Activitat</h3>
+<p>Obre tres aplicacions diferents. Analitza els processos creats.</p>
+<div class="tw"><table><thead><tr>
+<th>Aplicació</th>
+<th>PID</th>
+<th>CPU</th>
+<th>RAM</th>
+<th>Estat</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td> </td>
+<td> </td>
+<td> </td>
+<td> </td>
+<td> </td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c5-h11">Preguntes de reflexió</h3>
+<ol>
+<li>Per què dues aplicacions diferents poden consumir quantitats diferents de
+    memòria?</li>
+<li>Què passaria si finalitzem un procés important del sistema?</li>
+<li>Per què el PID canvia cada vegada que obrim un programa?</li>
+<li>Un procés té STAT «Z». Què vol dir?</li>
+<li>Quan faries servir SIGTERM i quan SIGKILL?</li>
+</ol>
+
+
+<section class="quiz" data-quiz="5"><h2 id="c5-quiz">Comprova que ho has entès</h2><p class="small">5 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c5" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c6" data-sess="s3" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 3 · Mapa del sistema d’arxius</span><span class="ca-chip">CA1.4 · CA1.5</span></p>
+  <h1><span class="num">6</span> Fitxers i directoris</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>El disc és l’armari de l’oficina. Els fitxers són els documents i els
+  directoris són les carpetes on els ordenes, unes dins de les altres, com les
+  branques d’un arbre. La ruta és l’adreça exacta per trobar un document:
+  armari, calaix, carpeta i document.</p><p class="matters"><strong>Per què t’importa?</strong> Si no saps on desa els fitxers un
+  programa, no els trobaràs quan els vulguis enviar o fer-ne una còpia. I al
+  terminal, sense la ruta correcta, cap ordre troba el fitxer.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c6-1">6.1 Què és un fitxer?</a></li><li><a href="#c6-2">6.2 Què és un directori?</a></li><li><a href="#c6-3">6.3 Rutes</a></li><li><a href="#c6-4">Ruta absoluta i relativa</a></li><li><a href="#c6-5">6.4 Estructura de directoris de Linux</a></li><li><a href="#c6-6">6.5 Estructura de carpetes de Windows</a></li><li><a href="#c6-7">6.6 Noms, extensions i tipus</a></li><li><a href="#c6-8">6.7 Comodins</a></li><li><a href="#c6-9">6.8 Atributs</a></li><li><a href="#c6-10">6.9 Operacions habituals</a></li></ol></nav>
+
+
+<h2 id="c6-1">6.1 Què és un fitxer?</h2>
+<p>Un fitxer és una estructura que conté informació emmagatzemada.</p>
+<p>Exemples:</p>
+<ul>
+<li>document.pdf</li>
+<li>imatge.jpg</li>
+<li>video.mp4</li>
+<li>programa.exe</li>
+</ul>
+<p>Un fitxer no és només el seu contingut. També té informació associada.</p>
+<h3 id="c6-h1">Metadades d’un fitxer</h3>
+<ul>
+<li>Nom.</li>
+<li>Extensió.</li>
+<li>Mida.</li>
+<li>Data de creació.</li>
+<li>Data de modificació.</li>
+<li>Propietari.</li>
+<li>Permisos.</li>
+</ul>
+<h2 id="c6-2">6.2 Què és un directori?</h2>
+<p>Un directori o carpeta serveix per organitzar fitxers.</p>
+<p>Un directori pot contenir:</p>
+<ul>
+<li>Fitxers.</li>
+<li>Altres directoris.</li>
+</ul>
+<p>Els directoris formen una estructura jeràrquica en forma d’arbre. A Linux hi
+  ha una única arrel, «/», i els altres discos s’hi munten com a branques. A
+  Windows, cada unitat té la seva arrel (C:\, D:\).</p>
+<h2 id="c6-3">6.3 Rutes</h2>
+<h3 id="c6-h2">Windows</h3>
+<div class="code"><pre>C:\Users\alumne\Documents\treball.docx</pre></div>
+<h3 id="c6-h3">Linux</h3>
+<div class="code"><pre>/home/alumne/Documents/treball.docx</pre></div>
+<h2 id="c6-4">Ruta absoluta i relativa</h2>
+<h3 id="c6-h4">Ruta absoluta</h3>
+<p>Indica la ubicació completa del fitxer.</p>
+<div class="code"><pre>/home/alumne/projecte/informe.txt</pre></div>
+<h3 id="c6-h5">Ruta relativa</h3>
+<p>Indica la ubicació respecte al directori actual.</p>
+<div class="code"><pre>projecte/informe.txt</pre></div>
+<p>«.» és el directori actual, «..» el directori pare i «~» el directori
+  personal (/home/usuari).</p>
+<h2 id="c6-5">6.4 Estructura de directoris de Linux</h2>
+<div class="tw"><table><thead><tr>
+<th>Directori</th>
+<th>Contingut</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>/</td>
+<td>Arrel de tot el sistema.</td>
+</tr>
+<tr>
+<td>/boot</td>
+<td>Nucli i fitxers d’arrencada.</td>
+</tr>
+<tr>
+<td>/dev</td>
+<td>Fitxers que representen dispositius (/dev/sda).</td>
+</tr>
+<tr>
+<td>/etc</td>
+<td>Configuració del sistema (fitxers de text).</td>
+</tr>
+<tr>
+<td>/home</td>
+<td>Directoris personals dels usuaris.</td>
+</tr>
+<tr>
+<td>/root</td>
+<td>Directori personal de l’administrador.</td>
+</tr>
+<tr>
+<td>/media, /mnt</td>
+<td>Punts de muntatge de dispositius extraïbles i temporals.</td>
+</tr>
+<tr>
+<td>/proc, /sys</td>
+<td>Informació del nucli i del maquinari en temps real.</td>
+</tr>
+<tr>
+<td>/tmp</td>
+<td>Fitxers temporals.</td>
+</tr>
+<tr>
+<td>/usr</td>
+<td>Programes i biblioteques.</td>
+</tr>
+<tr>
+<td>/var</td>
+<td>Dades variables: registres (/var/log), cues, memòria cau.</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c6-6">6.5 Estructura de carpetes de Windows</h2>
+<div class="tw"><table><thead><tr>
+<th>Carpeta</th>
+<th>Contingut</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>C:\Windows</td>
+<td>Sistema operatiu. C:\Windows\System32 conté els executables del
+        sistema.</td>
+</tr>
+<tr>
+<td>C:\Program Files</td>
+<td>Aplicacions de 64 bits.</td>
+</tr>
+<tr>
+<td>C:\Program Files (x86)</td>
+<td>Aplicacions de 32 bits.</td>
+</tr>
+<tr>
+<td>C:\ProgramData</td>
+<td>Dades compartides de les aplicacions (oculta).</td>
+</tr>
+<tr>
+<td>C:\Users\usuari</td>
+<td>Perfil de l’usuari: Documents, Escriptori, Baixades i AppData
+        (oculta).</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c6-7">6.6 Noms, extensions i tipus</h2>
+<ul>
+<li>Linux distingeix majúscules i minúscules (Informe.txt i informe.txt són
+    dos fitxers); Windows no.</li>
+<li>A Windows no es poden fer servir els caràcters \ / : * ? " &lt; &gt; | en
+    els noms.</li>
+<li>L’<strong>extensió</strong> (.txt, .pdf) indica a Windows amb quina
+    aplicació s’obre el fitxer; a Linux és només una convenció.</li>
+<li>El <strong>tipus real</strong> el determina el contingut. L’ordre
+    <code>file</code> el detecta encara que l’extensió sigui falsa.</li>
+</ul>
+<div class="code"><pre>$ cp foto.png document.txt
+$ file document.txt
+document.txt: PNG image data, 800 x 600, 8-bit/color RGB</pre></div>
+<p>El primer caràcter de <code>ls -l</code> indica el tipus: «-» fitxer normal,
+  «d» directori, «l» enllaç simbòlic, «b» i «c» dispositius.</p>
+<h2 id="c6-8">6.7 Comodins</h2>
+<div class="tw"><table><thead><tr>
+<th>Comodí</th>
+<th>Significat</th>
+<th>Exemple</th>
+<th>Coincideix amb</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>*</td>
+<td>Qualsevol seqüència de caràcters</td>
+<td>*.pdf</td>
+<td>factura.pdf, a.pdf</td>
+</tr>
+<tr>
+<td>?</td>
+<td>Exactament un caràcter</td>
+<td>informe?.txt</td>
+<td>informe1.txt, informeA.txt</td>
+</tr>
+<tr>
+<td>[ ]</td>
+<td>Un caràcter del conjunt</td>
+<td>foto[0-3].jpg</td>
+<td>foto0.jpg ... foto3.jpg</td>
+</tr>
+</tbody>
+</table></div>
+<p class="callout key"><strong>Recorda:</strong> comprova sempre què seleccionarà un comodí amb
+  <code>ls</code> abans de fer servir <code>rm</code>. L’ordre <code>rm
+  *.txt</code> no passa per la paperera.</p>
+<div class="tool" data-tool="glob"></div><h2 id="c6-9">6.8 Atributs</h2>
+<div class="tw"><table><thead><tr>
+<th>Atribut</th>
+<th>Linux</th>
+<th>Windows</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Mida</td>
+<td>ls -l · du -h</td>
+<td>Propietats</td>
+</tr>
+<tr>
+<td>Propietari i grup</td>
+<td>ls -l</td>
+<td>Propietats › Seguretat › Opcions avançades</td>
+</tr>
+<tr>
+<td>Dates</td>
+<td>stat: accés, modificació del contingut i canvi de metadades</td>
+<td>Creació, modificació, últim accés</td>
+</tr>
+<tr>
+<td>Ocult</td>
+<td>El nom comença per «.» (ls -a per veure’l)</td>
+<td>Atribut H (attrib +h fitxer)</td>
+</tr>
+<tr>
+<td>Només lectura</td>
+<td>Treure el permís w (chmod a-w)</td>
+<td>Atribut R (attrib +r fitxer)</td>
+</tr>
+<tr>
+<td>Sistema / arxiu</td>
+<td>—</td>
+<td>Atributs S i A</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c6-10">6.9 Operacions habituals</h2>
+<div class="tw"><table><thead><tr>
+<th>Operació</th>
+<th>Linux</th>
+<th>Windows (cmd / PowerShell)</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>On sóc / canviar de directori</td>
+<td>pwd · cd</td>
+<td>cd · Set-Location</td>
+</tr>
+<tr>
+<td>Llistar</td>
+<td>ls -la</td>
+<td>dir · Get-ChildItem</td>
+</tr>
+<tr>
+<td>Crear directori</td>
+<td>mkdir -p A/B</td>
+<td>mkdir</td>
+</tr>
+<tr>
+<td>Crear fitxer buit</td>
+<td>touch f.txt</td>
+<td>New-Item f.txt</td>
+</tr>
+<tr>
+<td>Copiar</td>
+<td>cp origen destí · cp -r</td>
+<td>copy · Copy-Item</td>
+</tr>
+<tr>
+<td>Moure o canviar el nom</td>
+<td>mv</td>
+<td>move · ren · Move-Item</td>
+</tr>
+<tr>
+<td>Esborrar</td>
+<td>rm · rm -r</td>
+<td>del · Remove-Item</td>
+</tr>
+<tr>
+<td>Cercar</td>
+<td>find ~ -name "*.pdf"</td>
+<td>dir /s *.pdf</td>
+</tr>
+<tr>
+<td>Comprimir</td>
+<td>tar -czf c.tar.gz dir · zip -r c.zip dir</td>
+<td>Compress-Archive</td>
+</tr>
+</tbody>
+</table></div>
+<section class="dossier"><h3 id="c6-h6">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>En quin directori de Linux buscaries la configuració del sistema? I els
+    registres?</li>
+<li>Per què a Linux es poden tenir els fitxers Nota.txt i nota.txt a la
+    mateixa carpeta i a Windows no?</li>
+<li>Quins fitxers seleccionaria el patró factura_2026-0?.pdf?</li>
+<li>Com saps si un fitxer anomenat foto.jpg és realment una imatge?</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="6"><h2 id="c6-quiz">Comprova que ho has entès</h2><p class="small">5 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c6" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c7" data-sess="s4" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessions 2 i 4 · Gestió de permisos</span><span class="ca-chip">CA1.6</span></p>
+  <h1><span class="num">7</span> Permisos d’arxius i directoris</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>Cada despatx de l’oficina té un pany, i cada usuari té les seves claus. Els
+  permisos diuen qui pot entrar a cada despatx, qui pot mirar els documents i
+  qui els pot canviar. El gerent (el sistema operatiu) comprova les claus cada
+  vegada que algú intenta obrir una porta.</p><p class="matters"><strong>Per què t’importa?</strong> Per això a l’institut pots fer servir
+  l’ordinador però no pots instal·lar programes ni obrir els fitxers dels teus
+  companys.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c7-1">7.1 Usuaris i grups</a></li><li><a href="#c7-2">7.2 Permisos bàsics</a></li><li><a href="#c7-3">7.3 Permisos Linux</a></li><li><a href="#c7-4">7.4 Permisos Windows NTFS</a></li><li><a href="#c7-5">7.5 Dissenyar i provar una matriu d’accés</a></li></ol></nav>
+
+
+<p>Els sistemes operatius moderns han de controlar qui pot accedir a la
+  informació.</p>
+<p>No tots els usuaris han de poder modificar tots els fitxers.</p>
+<p>Un sistema multiusuari ha de saber <strong>qui</strong> fa cada acció
+  (autenticació) i <strong>què</strong> li està permès (autorització).</p>
+<h2 id="c7-1">7.1 Usuaris i grups</h2>
+<ul>
+<li><strong>Usuari:</strong> identitat amb nom, identificador i directori
+    personal.</li>
+<li><strong>Grup:</strong> conjunt d’usuaris que comparteixen permisos. Es
+    donen permisos al grup, no a cada persona.</li>
+<li><strong>Administrador:</strong> root a Linux i el grup Administradors a
+    Windows.</li>
+<li><strong>sudo:</strong> permet a un usuari autoritzat executar una ordre
+    com a root, i en queda registre.</li>
+</ul>
+<p class="callout why"><strong>Principi de mínim privilegi:</strong> cada usuari ha de tenir només
+  els permisos imprescindibles per fer la seva feina. A l’aula no sou
+  administradors de l’equip: és aquest principi aplicat.</p>
+<h2 id="c7-2">7.2 Permisos bàsics</h2>
+<div class="tw"><table><thead><tr>
+<th>Permís</th>
+<th>Significat</th>
+<th>En un directori</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Lectura (r)</td>
+<td>Permet consultar informació.</td>
+<td>Llistar-ne el contingut (ls).</td>
+</tr>
+<tr>
+<td>Escriptura (w)</td>
+<td>Permet modificar informació.</td>
+<td>Crear, esborrar i canviar el nom dels fitxers de dins.</td>
+</tr>
+<tr>
+<td>Execució (x)</td>
+<td>Permet executar un programa.</td>
+<td>Entrar-hi (cd) i accedir als fitxers de dins.</td>
+</tr>
+</tbody>
+</table></div>
+<p class="callout key"><strong>Recorda:</strong> per poder esborrar un fitxer a Linux, el que
+  compta són els permisos del <strong>directori</strong>, no els del
+  fitxer.</p>
+<h2 id="c7-3">7.3 Permisos Linux</h2>
+<p>Exemple:</p>
+<div class="code"><pre>-rwxr-x---</pre></div>
+<p>Interpretació:</p>
+<div class="code"><pre>-
+|
++--- usuari (propietari)
+|      rwx
+|
++--- grup
+|      r-x
+|
++--- altres
+       ---</pre></div>
+<p>Pensa en l’oficina. El <strong>propietari</strong> és qui té la clau mestra
+  del seu despatx. El <strong>grup</strong> és el seu departament. I
+  <strong>altres</strong> és qualsevol altra persona de l’edifici.</p>
+<h3 id="c7-h1">Què volen dir r, w i x en una carpeta?</h3>
+<p>Una carpeta és com un despatx ple de documents:</p>
+<ul>
+<li><strong>x</strong> = poder-hi entrar, com obrir la porta del despatx
+    (<code>cd</code>).</li>
+<li><strong>r</strong> = veure què hi ha a dins, és a dir, la llista de
+    documents (<code>ls</code>).</li>
+<li><strong>w</strong> = afegir o treure documents (crear, esborrar o canviar
+    el nom dels fitxers).</li>
+</ul>
+<p>Per això, per fer servir una carpeta normalment necessites r i x alhora: obrir
+  la porta i veure què hi ha.</p>
+<h3 id="c7-h2">Notació octal</h3>
+<p>Cada permís té un valor: r = 4, w = 2, x = 1. Se sumen per a cada grup de
+  tres.</p>
+<h4>Pas a pas: de lletres a número</h4>
+<p>Exemple: <code>rwxr-x---</code></p>
+<ol>
+<li>Separa les nou lletres en tres grups de tres: <code>rwx</code> ·
+    <code>r-x</code> · <code>---</code>.</li>
+<li>Canvia cada lletra pel seu valor (r = 4, w = 2, x = 1) i cada guió per
+    0.</li>
+<li>Suma els valors de cada grup.</li>
+</ol>
+<div class="tw"><table><thead><tr>
+<th> </th>
+<th>Propietari</th>
+<th>Grup</th>
+<th>Altres</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Lletres</td>
+<td>rwx</td>
+<td>r-x</td>
+<td>---</td>
+</tr>
+<tr>
+<td>Valors</td>
+<td>4 + 2 + 1</td>
+<td>4 + 0 + 1</td>
+<td>0 + 0 + 0</td>
+</tr>
+<tr>
+<td>Número</td>
+<td>7</td>
+<td>5</td>
+<td>0</td>
+</tr>
+</tbody>
+</table></div>
+<p>Resultat: <strong>750</strong>. Per fer el camí invers (de número a lletres),
+  pregunta’t quins valors sumen cada xifra: 5 = 4 + 1, és a dir, r-x.</p>
+<p class="callout why"><strong>Per què 4, 2 i 1?</strong> Són els pesos de tres bits (apartat 4).
+  Cada permís és un bit encès (1) o apagat (0): rwx = 111 = 7 i r-x = 101 = 5.
+  Amb tres bits el número va de 0 a 7, per això cada xifra és octal.</p>
+<div class="tw"><table><thead><tr>
+<th>Simbòlic</th>
+<th>Càlcul</th>
+<th>Octal</th>
+<th>Ús típic</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>rwxr-xr-x</td>
+<td>(4+2+1)(4+1)(4+1)</td>
+<td>755</td>
+<td>Programes i directoris públics</td>
+</tr>
+<tr>
+<td>rw-r--r--</td>
+<td>(4+2)(4)(4)</td>
+<td>644</td>
+<td>Fitxers normals</td>
+</tr>
+<tr>
+<td>rwxr-x---</td>
+<td>(7)(5)(0)</td>
+<td>750</td>
+<td>Directori d’equip: el grup llegeix, la resta no hi entra</td>
+</tr>
+<tr>
+<td>rw-------</td>
+<td>(6)(0)(0)</td>
+<td>600</td>
+<td>Fitxers privats</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c7-h3">Comandes importants</h3>
+<h4>Veure permisos</h4>
+<div class="code"><pre>ls -l</pre></div>
+<h4>Modificar permisos</h4>
+<div class="code"><pre>chmod 750 carpeta
+chmod g-w,o-rwx informe.txt</pre></div>
+<h4>Canviar propietari</h4>
+<div class="code"><pre>chown usuari fitxer</pre></div>
+<p>Canviar el propietari d’un fitxer requereix ser administrador. Un usuari
+  normal rep l’error «Operation not permitted». En canvi, qualsevol usuari pot
+  canviar els permisos (chmod) dels seus propis fitxers.</p>
+<h3 id="c7-h4">Exemple · Per què puc llegir /etc/passwd però no /etc/shadow?</h3>
+<div class="code"><pre>-rw-r--r-- root root    /etc/passwd
+-rw-r----- root shadow  /etc/shadow</pre></div>
+<p>A /etc/passwd els altres tenen r: tothom el pot llegir (conté noms d’usuari,
+  no contrasenyes). A /etc/shadow els altres no tenen cap permís: conté els
+  resums de les contrasenyes i només el pot llegir l’administrador.</p>
+<div class="tool" data-tool="perm"></div><details class="more"><summary><span class="more-tag">Per saber-ne més</span> Permisos especials</summary><div class="more-body">
+<p><em>Per saber-ne més. No cal per fer les sessions.</em></p>
+<ul>
+<li><strong>setuid:</strong> el programa s’executa amb els permisos del
+    propietari. Per exemple, /usr/bin/passwd té setuid perquè qualsevol usuari
+    pugui canviar la seva contrasenya.</li>
+<li><strong>sticky bit:</strong> en un directori com /tmp, cadascú només pot
+    esborrar els seus fitxers.</li>
+</ul>
+</div></details><h2 id="c7-4">7.4 Permisos Windows NTFS</h2>
+<p>Windows utilitza un sistema basat en ACL:</p>
+<p><strong>Access Control List</strong></p>
+<p>Una ACL conté una llista d’usuaris i els permisos que tenen.</p>
+<p>És com la llista penjada a la porta d’un despatx, amb el nom de cada persona
+  que hi pot entrar i què hi pot fer. Els permisos bàsics de Linux només tenen
+  tres caselles (propietari, grup i altres); en una ACL hi pots apuntar tantes
+  persones com vulguis.</p>
+<p>Exemple:</p>
+<div class="tw"><table><thead><tr>
+<th>Usuari</th>
+<th>Permís</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Administrador</td>
+<td>Control total</td>
+</tr>
+<tr>
+<td>Professor</td>
+<td>Lectura i modificació</td>
+</tr>
+<tr>
+<td>Alumne</td>
+<td>Només lectura</td>
+</tr>
+</tbody>
+</table></div>
+<div class="tw"><table><thead><tr>
+<th>Permís bàsic NTFS</th>
+<th>Què permet</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Control total</td>
+<td>Tot, inclòs canviar permisos.</td>
+</tr>
+<tr>
+<td>Modificar</td>
+<td>Llegir, escriure i esborrar.</td>
+</tr>
+<tr>
+<td>Lectura i execució</td>
+<td>Veure i executar.</td>
+</tr>
+<tr>
+<td>Lectura</td>
+<td>Veure el contingut.</td>
+</tr>
+<tr>
+<td>Escriptura</td>
+<td>Crear fitxers i escriure-hi.</td>
+</tr>
+</tbody>
+</table></div>
+<ul>
+<li><strong>Herència:</strong> els permisos d’una carpeta passen per defecte
+    als fitxers que conté.</li>
+<li><strong>Denegar té prioritat</strong> sobre permetre.</li>
+<li><strong>Permisos efectius:</strong> el resultat de combinar els permisos
+    de l’usuari i de tots els seus grups.</li>
+</ul>
+<p class="callout why"><strong>Per entendre l’herència:</strong> una carpeta nova rep les mateixes
+  claus que la carpeta on és, com una habitació d’un pis que s’obre amb la clau
+  del pis. <strong>Deshabilitar l’herència</strong> és canviar el pany d’aquella
+  habitació: a partir d’aquell moment només hi entra qui tingui la clau nova,
+  encara que tingui la clau del pis.</p>
+<p class="callout why"><strong>Per entendre «denegar té prioritat»:</strong> si una norma diu «pots
+  entrar» i una altra diu «no pots entrar», guanya el «no». És la manera més
+  segura d’evitar errors.</p>
+<div class="code"><pre>icacls C:\Empresa
+icacls C:\Empresa /grant personal:(OI)(CI)RX
+icacls C:\Empresa /inheritance:r</pre></div>
+<p><code>(OI)</code> i <code>(CI)</code> fan que el permís s’hereti als fitxers
+  i a les subcarpetes; <code>/inheritance:r</code> elimina els permisos heretats
+  de la carpeta pare. Per provar què pot fer un altre usuari sense tancar la
+  sessió: <code>runas /user:personal cmd</code>.</p>
+<h2 id="c7-5">7.5 Dissenyar i provar una matriu d’accés</h2>
+<div class="tw"><table><thead><tr>
+<th>Identitat</th>
+<th>Necessitat</th>
+<th>Solució a Linux</th>
+<th>Solució a Windows (NTFS)</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Direcció</td>
+<td>Llegir i modificar</td>
+<td>Propietari amb rwx</td>
+<td>Usuari direccio: Modificar</td>
+</tr>
+<tr>
+<td>Personal</td>
+<td>Només llegir</td>
+<td>Grup amb r-x</td>
+<td>Usuari personal: Lectura i execució</td>
+</tr>
+<tr>
+<td>Visitant</td>
+<td>Cap accés</td>
+<td>Altres amb ---</td>
+<td>Cap entrada a l’ACL (i sense herència)</td>
+</tr>
+</tbody>
+</table></div>
+<p>A Linux la matriu és <strong>chmod 750</strong> (propietari rwx, grup r-x,
+  altres ---). A Windows, les ACL permeten donar permisos a cada usuari per
+  separat, sense dependre de qui és el propietari.</p>
+<p>Una prova de permisos sempre ha d’incloure els <strong>accessos
+  permesos</strong> i els <strong>errors esperats</strong>.</p>
+<section class="dossier"><h3 id="c7-h5">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Calcula l’octal de rwxrw-r-- i explica què pot fer cada categoria.</li>
+<li>Un usuari té r i w sobre un fitxer però no té w sobre el directori. Pot
+    esborrar el fitxer? Per què?</li>
+<li>A Windows, un usuari pertany a dos grups: un li permet Modificar i l’altre
+    li denega l’Escriptura. Què passa?</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="7"><h2 id="c7-quiz">Comprova que ho has entès</h2><p class="small">5 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c7" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c8" data-sess="s5" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 5 · Quin sistema d’arxius triaries?</span><span class="ca-chip">CA1.7</span></p>
+  <h1><span class="num">8</span> Sistemes d’arxius</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>Si el disc és l’armari, el sistema d’arxius és la manera d’ordenar-lo: on va
+  cada carpeta, quines etiquetes porta i on és l’índex per trobar-ho tot. Hi ha
+  diverses maneres d’ordenar l’armari (FAT32, exFAT, NTFS, ext4) i cadascuna té
+  avantatges i límits. Formatar és buidar l’armari i començar amb un sistema
+  d’ordenació nou.</p><p class="matters"><strong>Per què t’importa?</strong> Si una memòria USB no et deixa copiar una
+  pel·lícula de 5 GB encara que tingui espai lliure, el culpable és el seu
+  sistema d’arxius (FAT32), no la mida de la memòria.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c8-1">8.1 Conceptes bàsics</a></li><li><a href="#c8-2">8.2 FAT32</a></li><li><a href="#c8-3">8.3 exFAT</a></li><li><a href="#c8-4">8.4 NTFS</a></li><li><a href="#c8-5">8.5 ext4</a></li><li><a href="#c8-6">8.6 Comparativa</a></li><li><a href="#c8-7">8.7 Com triar un sistema d’arxius</a></li><li><a href="#c8-8">8.8 Provar sistemes d’arxius a Windows</a></li><li><a href="#c8-9">8.9 Estudiar sistemes d’arxius a Linux sense ser administrador</a></li></ol></nav>
+
+
+<p>Un sistema d’arxius és el mètode que utilitza un sistema operatiu per guardar
+  i recuperar informació d’un dispositiu.</p>
+<p>Defineix:</p>
+<ul>
+<li>Com s’organitzen els fitxers.</li>
+<li>Com es guarden les metadades.</li>
+<li>Com es controlen els permisos.</li>
+<li>Com es recupera informació després d’un error.</li>
+</ul>
+<h2 id="c8-1">8.1 Conceptes bàsics</h2>
+<ul>
+<li><strong>Formatar:</strong> crear l’estructura buida d’un sistema
+    d’arxius en una partició. Esborra l’accés a les dades anteriors.</li>
+<li><strong>Bloc o clúster:</strong> unitat mínima d’espai que s’assigna a
+    un fitxer. Un fitxer d’1 byte ocupa un bloc sencer.</li>
+<li><strong>Taula d’assignació:</strong> FAT fa servir una taula
+    d’assignació de fitxers; NTFS, la taula mestra de fitxers (MFT); ext4, els
+    inodes.</li>
+<li><strong>Muntar:</strong> fer accessible un sistema d’arxius en una
+    carpeta (Linux) o amb una lletra d’unitat (Windows).</li>
+</ul>
+<h2 id="c8-2">8.2 FAT32</h2>
+<p>Sistema molt compatible utilitzat en dispositius extraïbles.</p>
+<h3 id="c8-h1">Avantatges</h3>
+<ul>
+<li>Compatible amb gairebé tots els sistemes.</li>
+<li>És obligatori per a la partició d’arrencada UEFI.</li>
+</ul>
+<h3 id="c8-h2">Limitacions</h3>
+<ul>
+<li>No permet fitxers individuals superiors a 4 GB (exactament 4 GiB menys 1
+    byte).</li>
+<li>No té permisos avançats.</li>
+<li>No té journaling.</li>
+</ul>
+<h2 id="c8-3">8.3 exFAT</h2>
+<p>Creat per dispositius extraïbles moderns.</p>
+<p>Millora FAT32 eliminant la limitació dels 4 GB.</p>
+<p>És compatible amb Windows, macOS i Linux i és l’estàndard de les targetes SD
+  de gran capacitat. No té permisos ni journaling.</p>
+<h2 id="c8-4">8.4 NTFS</h2>
+<p>Sistema d’arxius principal de Windows.</p>
+<p>Inclou:</p>
+<ul>
+<li>Permisos ACL.</li>
+<li>Journaling.</li>
+<li>Compressió.</li>
+<li>Xifrat.</li>
+</ul>
+<p>Linux el llegeix i l’escriu; macOS, per defecte, només el llegeix.</p>
+<h2 id="c8-5">8.5 ext4</h2>
+<p>Sistema d’arxius habitual en Linux.</p>
+<p>Característiques:</p>
+<ul>
+<li>Journaling.</li>
+<li>Bona estabilitat.</li>
+<li>Gran rendiment.</li>
+<li>Permisos Unix.</li>
+</ul>
+<p>Windows no el llegeix sense eines addicionals.</p>
+<h2 id="c8-6">8.6 Comparativa</h2>
+<div class="tw"><table><thead><tr>
+<th> </th>
+<th>FAT32</th>
+<th>exFAT</th>
+<th>NTFS</th>
+<th>ext4</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Mida màxima de fitxer</td>
+<td>4 GiB − 1 byte</td>
+<td>Pràcticament il·limitada</td>
+<td>Molt gran</td>
+<td>16 TiB</td>
+</tr>
+<tr>
+<td>Journaling</td>
+<td>No</td>
+<td>No</td>
+<td>Sí</td>
+<td>Sí</td>
+</tr>
+<tr>
+<td>Permisos</td>
+<td>No</td>
+<td>No</td>
+<td>ACL</td>
+<td>Unix i ACL</td>
+</tr>
+<tr>
+<td>Windows</td>
+<td>Sí</td>
+<td>Sí</td>
+<td>Sí</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Linux</td>
+<td>Sí</td>
+<td>Sí</td>
+<td>Sí</td>
+<td>Sí</td>
+</tr>
+<tr>
+<td>macOS</td>
+<td>Sí</td>
+<td>Sí</td>
+<td>Només lectura</td>
+<td>No</td>
+</tr>
+<tr>
+<td>Ús típic</td>
+<td>USB petits, partició d’arrencada UEFI</td>
+<td>USB, discos externs, targetes SD</td>
+<td>Sistema Windows</td>
+<td>Sistema Linux</td>
+</tr>
+</tbody>
+</table></div>
+<h2 id="c8-7">8.7 Com triar un sistema d’arxius</h2>
+<p>No hi ha un sistema d’arxius «millor»: hi ha el més adequat per a cada cas.
+  Fes-te aquestes preguntes, en aquest ordre:</p>
+<ol>
+<li><strong>Quins sistemes l’han de llegir i escriure?</strong> Si cal
+    compatibilitat universal: FAT32 o exFAT.</li>
+<li><strong>Hi haurà fitxers de més de 4 GiB?</strong> Si és així, descarta
+    FAT32.</li>
+<li><strong>Cal controlar qui accedeix a cada fitxer?</strong> Calen permisos:
+    NTFS o ext4.</li>
+<li><strong>Ha de resistir talls de corrent?</strong> Cal journaling: NTFS o
+    ext4.</li>
+<li><strong>És el disc del sistema?</strong> NTFS per a Windows, ext4 per a
+    Linux.</li>
+</ol>
+<h3 id="c8-h3">Exemple · Disc extern de 2 TB per passar vídeos de 8 GB entre un Windows i
+  un Mac</h3>
+<p>FAT32 queda descartat pels fitxers de 8 GB. NTFS no es pot escriure des del
+  Mac i ext4 no es llegeix ni a Windows ni a Mac. Decisió:
+  <strong>exFAT</strong>. Limitació que cal comunicar: no té journaling, cal
+  expulsar el disc correctament abans de desconnectar-lo.</p>
+<div class="tool" data-tool="fs"></div><h2 id="c8-8">8.8 Provar sistemes d’arxius a Windows</h2>
+<p class="callout why"><strong>Per què?</strong> Formatar requereix ser administrador i esborra tot
+  el que hi ha al volum. A la màquina virtual Windows ets administrador, i hi
+  pots afegir un disc virtual nou i buit per provar-hi sense cap risc.</p>
+<p class="callout key"><strong>Recorda:</strong> formatar esborra el contingut del volum. Comprova
+  dues vegades la lletra d’unitat o el dispositiu abans de fer-ho, i fes-ho
+  només en discos de prova.</p>
+<h3 id="c8-h4">Pas 1 · Afegir un disc de proves a la VM</h3>
+<ol>
+<li>Apaga la VM i fes-ne una <strong>instantània</strong> (snapshot): una
+    «foto» de l’estat actual per poder-hi tornar si alguna cosa va malament.</li>
+<li>Configuració de la VM › <em>Emmagatzematge</em> › afegeix un disc dur nou
+    de 16 GB, de <strong>mida dinàmica</strong>: el fitxer del disc només creix
+    a mesura que s’hi escriuen dades.</li>
+<li>Engega la VM i obre <em>Gestió de discs</em> (clic dret al botó Inici).
+    Windows detecta el disc nou i et demana inicialitzar-lo: tria
+    <strong>GPT</strong>.</li>
+<li>Sobre l’espai «No assignat», clic dret › <em>Volum simple nou</em>.
+    L’assistent et demana la mida (en MB: 5 GB = 5120 MB), la
+    lletra, el sistema d’arxius i l’etiqueta (el nom del volum). Repeteix-ho
+    per crear els tres volums:</li>
+</ol>
+<div class="tw"><table><thead><tr>
+<th>Lletra</th>
+<th>Etiqueta</th>
+<th>Mida</th>
+<th>Sistema d’arxius</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>F:</td>
+<td>USB32</td>
+<td>5 GB</td>
+<td>FAT32</td>
+</tr>
+<tr>
+<td>G:</td>
+<td>EXTERN</td>
+<td>5 GB</td>
+<td>exFAT</td>
+</tr>
+<tr>
+<td>H:</td>
+<td>DADES</td>
+<td>5 GB</td>
+<td>NTFS</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c8-h5">Pas 2 · Crear un fitxer de 4,1 GiB a cada volum</h3>
+<p>Obre un terminal d’administrador (clic dret a Inici › <em>Terminal
+  (administrador)</em>) i escriu:</p>
+<div class="code"><pre>fsutil file createnew F:\gran.bin 4400000000
+fsutil file createnew G:\gran.bin 4400000000
+fsutil file createnew H:\gran.bin 4400000000</pre></div>
+<div class="tw"><table><thead><tr>
+<th>Part</th>
+<th>Què vol dir</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td><code>fsutil</code></td>
+<td>«File system utility»: utilitat del sistema de fitxers de Windows.</td>
+</tr>
+<tr>
+<td><code>file createnew</code></td>
+<td>Crea un fitxer nou de la mida indicada.</td>
+</tr>
+<tr>
+<td><code>F:\gran.bin</code></td>
+<td>On es crea i amb quin nom.</td>
+</tr>
+<tr>
+<td><code>4400000000</code></td>
+<td>La mida en bytes: uns 4,1 GiB, una mica més que el límit de
+        FAT32.</td>
+</tr>
+</tbody>
+</table></div>
+<p>L’ordre reserva l’espai però no hi escriu dades de veritat. Per això és
+  instantània i no omple el disc de l’ordinador de l’aula.</p>
+<p class="callout why"><strong>Què ha de passar?</strong></p>
+<ul>
+<li><strong>F: (FAT32):</strong> falla. FAT32 no admet fitxers de 4 GiB o més
+    (el límit és 4 GiB − 1 byte). Fixa’t que hi hauria espai de sobres: el
+    volum té 5 GB. El problema no és l’espai, és el sistema d’arxius.</li>
+<li><strong>G: (exFAT) i H: (NTFS):</strong> funciona i el fitxer es crea.</li>
+</ul>
+<h3 id="c8-h6">Pas 3 · Veure el motiu amb l’Explorador</h3>
+<p>Amb l’Explorador de fitxers, copia <code>G:\gran.bin</code> a F:. Windows
+  t’explica el motiu real: «El fitxer és massa gran per al sistema de fitxers
+  de destinació».</p>
+<h3 id="c8-h7">Pas 4 · Qui té permisos?</h3>
+<p>A l’Explorador, fes clic dret a cada volum › <em>Propietats</em>. Només H:
+  (NTFS) té la pestanya <strong>Seguretat</strong>, perquè és l’únic dels tres
+  que guarda permisos (ACL). En un volum FAT32 o exFAT, qualsevol persona que el
+  connecti pot llegir-ho tot.</p>
+<p>Quan acabis, esborra els fitxers <code>gran.bin</code>.</p>
+<p>Windows no pot crear ni llegir ext4 sense eines addicionals.</p>
+<h2 id="c8-9">8.9 Estudiar sistemes d’arxius a Linux sense ser administrador</h2>
+<p class="callout why"><strong>Per què?</strong> Un usuari normal no pot formatar ni muntar discos
+  reals. Però sí que pot veure quins sistemes d’arxius fa servir l’equip i
+  crear-ne un dins d’un fitxer per estudiar-lo.</p>
+<h3 id="c8-h8">Pas 1 · Quins sistemes d’arxius té el meu equip?</h3>
+<div class="code"><pre>lsblk -f</pre></div>
+<p>Ja coneixes <code>lsblk</code> de la sessió 1: llista els discos i les seves
+  particions. L’opció <code>-f</code> (de «filesystem», sistema d’arxius) hi
+  afegeix la columna <strong>FSTYPE</strong>, amb el sistema d’arxius de cada
+  partició. Exemple resumit (a la teva pantalla hi haurà més columnes):</p>
+<div class="code"><pre>NAME        FSTYPE   MOUNTPOINTS
+nvme0n1
+├─nvme0n1p1 vfat     /boot/efi      ← partició d’arrencada UEFI (FAT32)
+└─nvme0n1p2 ext4     /              ← partició principal de Linux</pre></div>
+<p><code>vfat</code> és el nom que Linux fa servir per a la família FAT. L’aplicació
+  <em>Discs</em> mostra el mateix de manera gràfica: clica cada partició i mira
+  el camp <em>Contingut</em>. També ho pots veure amb <code>df -hT</code>
+  (columna <em>Type</em>).</p>
+<h3 id="c8-h9">Pas 2 · Un disc de joguina</h3>
+<p>Un <strong>fitxer imatge</strong> és un fitxer normal que fa de disc: a dins
+  hi pots crear un sistema d’arxius, com si fos una memòria USB. No toca cap disc
+  real, i per això no cal ser administrador. L’anomenarem «disc de
+  joguina».</p>
+<div class="code"><pre>truncate -s 64M prova4.img
+mkfs.ext4 -q prova4.img
+dumpe2fs -h prova4.img | grep -i journal</pre></div>
+<div class="tw"><table><thead><tr>
+<th>Ordre</th>
+<th>Què fa</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td><code>truncate -s 64M prova4.img</code></td>
+<td>Crea un fitxer buit de 64 MB anomenat prova4.img. <code>-s</code> =
+        «size», la mida.</td>
+</tr>
+<tr>
+<td><code>mkfs.ext4 -q prova4.img</code></td>
+<td>«Make filesystem»: formata el fitxer en ext4. <code>-q</code> =
+        «quiet», sense missatges.</td>
+</tr>
+<tr>
+<td><code>dumpe2fs -h prova4.img</code></td>
+<td>Mostra les dades internes d’un sistema d’arxius ext2, ext3 o ext4.
+        <code>-h</code> = només la capçalera (el resum).</td>
+</tr>
+<tr>
+<td><code>|</code></td>
+<td>La <strong>canonada</strong>: passa el resultat de l’ordre de
+        l’esquerra a l’ordre de la dreta.</td>
+</tr>
+<tr>
+<td><code>grep -i journal</code></td>
+<td>Mostra només les línies que contenen «journal». <code>-i</code> = sense
+        importar majúscules o minúscules.</td>
+</tr>
+</tbody>
+</table></div>
+<p>Resultat amb ext4 (resumit):</p>
+<div class="code"><pre>Filesystem features:      has_journal ext_attr resize_inode dir_index filetype extent 64bit ...
+Journal inode:            8
+Total journal size:       4096k</pre></div>
+<p><code>has_journal</code> vol dir que aquest sistema d’arxius té journaling: té
+  la «llibreta» de l’apartat 9. Les altres línies diuen on és la llibreta i
+  quant ocupa (4 MB). La primera línia que surt a la pantalla
+  (<code>dumpe2fs 1.4...</code>) només indica la versió del programa.</p>
+<p>Ara fes el mateix amb ext2, l’antecessor d’ext4:</p>
+<div class="code"><pre>truncate -s 64M prova2.img
+mkfs.ext2 -q prova2.img
+dumpe2fs -h prova2.img | grep -i journal</pre></div>
+<p>Aquesta vegada no surt cap línia amb «journal» (només la de la versió):
+  ext2 no té journaling, no té llibreta.</p>
+<p>Si alguna ordre no es troba, escriu <code>/sbin/</code> davant (per exemple
+  <code>/sbin/mkfs.ext4</code>): és la carpeta on hi ha les eines
+  d’administració. Quan acabis, esborra els discos de joguina:</p>
+<div class="code"><pre>rm prova4.img prova2.img</pre></div>
+<section class="dossier"><h3 id="c8-h10">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Què és un clúster? Per què un fitxer molt petit pot ocupar més espai del
+    que indica la seva mida?</li>
+<li>Tria i justifica el sistema d’arxius per a: (a) un USB de 16 GB per
+    imprimir fotos en una botiga; (b) el disc del sistema d’un servidor Linux;
+    (c) una targeta SD de 256 GB per a una càmera 4K.</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="8"><h2 id="c8-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c8" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="c9" data-sess="s5" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Sessió 5 · Quin sistema d’arxius triaries?</span><span class="ca-chip">CA1.7</span></p>
+  <h1><span class="num">9</span> Què és el journaling?</h1>
+</header>
+<aside class="summary"><p class="eyebrow">En poques paraules</p><p>El journaling és una llibreta on el sistema apunta què farà abans de fer-ho.
+  Si l’oficina es queda sense llum a mitja feina, quan torna la llum només cal
+  llegir la llibreta per saber què havia quedat a mitges. Així l’armari no queda
+  desordenat.</p><p class="matters"><strong>Per què t’importa?</strong> Si se’n va la llum mentre l’ordinador
+  desa fitxers, el journaling fa que, en tornar-lo a engegar, el disc estigui en
+  ordre en pocs segons en lloc d’haver de revisar-lo sencer.</p></aside><nav class="ontoc" aria-label="En aquest apartat"><p class="eyebrow">En aquest apartat</p><ol><li><a href="#c9-1">9.1 Problema sense journaling</a></li><li><a href="#c9-2">9.2 Transaccions</a></li><li><a href="#c9-3">9.3 Funcionament del journaling</a></li><li><a href="#c9-4">9.4 Sistemes amb journaling</a></li></ol></nav>
+
+
+<p>Quan un sistema està treballant amb informació pot passar que es produeixi un
+  error inesperat:</p>
+<ul>
+<li>Tall de corrent.</li>
+<li>Bloqueig del sistema.</li>
+<li>Reinici forçat.</li>
+<li>Fallada del dispositiu.</li>
+</ul>
+<p>Si en aquell moment s'estava modificant informació del disc, el sistema
+  d'arxius podria quedar en un estat inconsistent.</p>
+<h2 id="c9-1">9.1 Problema sense journaling</h2>
+<p>Imaginem que estem guardant un document:</p>
+<ol>
+<li>El sistema comença a escriure dades.</li>
+<li>S'actualitzen les metadades del fitxer.</li>
+<li>L'equip s'apaga sobtadament.</li>
+</ol>
+<p>El sistema podria tenir informació incompleta: blocs marcats com a ocupats
+  que no pertanyen a cap fitxer, o un fitxer que apunta a blocs lliures. Caldrà
+  una comprovació completa del disc (<code>fsck</code> a Linux,
+  <code>chkdsk</code> a Windows), que pot durar molt i no sempre ho
+  arregla.</p>
+<h2 id="c9-2">9.2 Transaccions</h2>
+<p>Una <strong>transacció</strong> és un conjunt d’operacions que s’han de fer
+  totes o cap. Si no es poden completar totes, el sistema ha de poder tornar a
+  l’estat anterior. Un sistema d’arxius amb journaling és un sistema
+  <strong>transaccional</strong>.</p>
+<p class="callout why"><strong>Un exemple de cada dia:</strong> una transferència bancària. Cal
+  treure 50 € d’un compte i posar-los en un altre. Si només es fes la primera
+  meitat, els diners desapareixerien. Per això les dues operacions formen una
+  transacció: o es fan totes dues o no se’n fa cap.</p>
+<p>Al disc passa el mateix. Moure un fitxer vol dir afegir-lo a la carpeta nova
+  i treure’l de la vella. Si només es fes una de les dues coses, el fitxer
+  quedaria duplicat o perdut.</p>
+<h2 id="c9-3">9.3 Funcionament del journaling</h2>
+<p>Els sistemes amb journaling registren abans les operacions importants.</p>
+<div class="code"><pre>1. Registrar operació   (s'escriu al diari què es farà)
+2. Executar canvi       (es fan els canvis reals al disc)
+3. Confirmar operació   (es marca l'entrada com a completada)</pre></div>
+<p>Si hi ha un error, el sistema pot revisar aquest registre i recuperar una
+  situació coherent: les operacions completes es confirmen i les incompletes es
+  desfan. La comprovació dura segons en lloc de minuts o hores.</p>
+<p class="callout why"><strong>La llibreta:</strong> imagina que estàs reordenant l’armari. Abans de
+  cada canvi apuntes en una llibreta «trauré la carpeta A i la posaré al calaix
+  2». Quan has acabat, ho marques com a fet. Si se’n va la llum a mitja feina,
+  només has de llegir l’última línia de la llibreta per saber què havia quedat a
+  mitges, i acabar-ho o desfer-ho.</p>
+<h3 id="c9-h1">Un cas real: copiar fotos a una memòria USB</h3>
+<p>Estàs copiant fotos a una memòria USB i la treus abans que acabi, o se’n va
+  la llum mentre l’ordinador desa fitxers. Què passa?</p>
+<ul>
+<li><strong>Sense journaling (FAT32, exFAT):</strong> l’índex del disc pot
+    quedar trencat. En tornar-lo a connectar, Windows et pot demanar
+    «Examinar i reparar la unitat». La revisió pot trigar molt, i alguna foto
+    pot quedar malmesa o desaparèixer.</li>
+<li><strong>Amb journaling (NTFS, ext4):</strong> quan tornes a connectar el
+    disc o a engegar l’equip, el sistema llegeix la llibreta i acaba o desfà
+    l’operació que havia quedat a mitges. Tarda uns segons i l’índex queda en
+    ordre.</li>
+</ul>
+<p>Fixa’t que, fins i tot amb journaling, la foto que s’estava copiant en el
+  moment del tall es pot perdre. El journaling protegeix l’ordre de l’armari,
+  no cada document. Per això no és una còpia de seguretat (apartat 9.4).</p>
+<div class="tool" data-tool="journal"></div><details class="more"><summary><span class="more-tag">Per saber-ne més</span> Modes de journaling d’ext4</summary><div class="more-body">
+<p><em>Per saber-ne més. No cal per fer les sessions.</em></p>
+<div class="tw"><table><thead><tr>
+<th>Mode de journaling d’ext4</th>
+<th>Què es registra</th>
+<th>Seguretat / rendiment</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>journal</td>
+<td>Metadades i dades</td>
+<td>Màxima seguretat, més lent.</td>
+</tr>
+<tr>
+<td>ordered (per defecte)</td>
+<td>Metadades; les dades s’escriuen abans de confirmar-les</td>
+<td>Bon equilibri.</td>
+</tr>
+<tr>
+<td>writeback</td>
+<td>Només metadades</td>
+<td>Més ràpid, menys segur.</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><h2 id="c9-4">9.4 Sistemes amb journaling</h2>
+<div class="tw"><table><thead><tr>
+<th>Sistema</th>
+<th>Journaling</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>FAT32</td>
+<td>No</td>
+</tr>
+<tr>
+<td>exFAT</td>
+<td>No tradicional</td>
+</tr>
+<tr>
+<td>NTFS</td>
+<td>Sí</td>
+</tr>
+<tr>
+<td>ext4</td>
+<td>Sí</td>
+</tr>
+</tbody>
+</table></div>
+<h3 id="c9-h2">Important</h3>
+<p>El journaling NO és una còpia de seguretat.</p>
+<p>Un sistema amb journaling pot recuperar coherència, però no recupera un
+  fitxer eliminat accidentalment.</p>
+<p>Tampoc garanteix que no es perdi res: les dades que s’estaven escrivint en
+  el moment del tall es poden perdre.</p>
+<section class="dossier"><h3 id="c9-h3">Preguntes per al dossier</h3><p class="small">Respon-les al teu Google Doc. No es corregeixen aquí: són per pensar i escriure amb les teves paraules.</p>
+<ol>
+<li>Explica pas a pas què passa en un sistema amb journaling quan hi ha un tall
+    de corrent mentre es desa un fitxer.</li>
+<li>Per què diem que el journaling no és una còpia de seguretat?</li>
+<li>Quin sistema d’arxius triaries per a un equip crític que no pot perdre
+    informació? Què més li recomanaries?</li>
+</ol>
+
+
+</section><section class="quiz" data-quiz="9"><h2 id="c9-quiz">Comprova que ho has entès</h2><p class="small">4 preguntes amb correcció automàtica. La teva millor puntuació es guarda en aquest navegador.</p><div class="qlist"></div><p class="qscore" aria-live="polite"></p></section><footer class="chap-foot"><button class="btn done-btn" data-done="c9" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="ca" data-sess="ax" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Annexos</span></p>
+  <h1><span class="num">A</span> Ordres de referència</h1>
+</header><div class="filter"><label for="flt-ca">Filtra</label><input data-filter="" id="flt-ca" placeholder="Escriu una ordre o una paraula (ps, chmod, permisos…)" type="search"/></div>
+<p>Totes les ordres del projecte, amb el seu origen i per a què serveixen.</p>
+<div class="tw"><table><thead><tr>
+<th>Sessió</th>
+<th>Ordre</th>
+<th>Ve de</th>
+<th>Per a què serveix</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>Sessió 1</td>
+<td>lscpu</td>
+<td>list CPU</td>
+<td>Descriu el processador: model, nuclis, fils, arquitectura.</td>
+</tr>
+<tr>
+<td>Sessió 1</td>
+<td>free -h</td>
+<td>memòria lliure, en format humà</td>
+<td>Mostra la RAM total, usada i disponible.</td>
+</tr>
+<tr>
+<td>Sessió 1</td>
+<td>lsblk</td>
+<td>list block devices</td>
+<td>Llista discos i particions amb la seva mida.</td>
+</tr>
+<tr>
+<td>Sessió 1</td>
+<td>hostnamectl</td>
+<td>control del nom de l’equip</td>
+<td>Mostra el sistema operatiu i la versió del nucli.</td>
+</tr>
+<tr>
+<td>Sessió 1</td>
+<td>ip a · ipconfig</td>
+<td>IP address · IP configuration</td>
+<td>Mostra les targetes de xarxa i les seves adreces.</td>
+</tr>
+<tr>
+<td>Sessió 1</td>
+<td>msinfo32 · systeminfo</td>
+<td>Microsoft system information</td>
+<td>Informació completa del sistema a Windows.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>ps aux · tasklist</td>
+<td>process status · llista de tasques</td>
+<td>Fotografia dels processos en marxa.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>top</td>
+<td>els de dalt (més actius)</td>
+<td>Processos en temps real, ordenats per ús de CPU. Surt amb q.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>renice</td>
+<td>tornar a fixar l’amabilitat</td>
+<td>Canvia la prioritat d’un procés.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>kill · taskkill</td>
+<td>matar · matar tasca</td>
+<td>Demana a un procés que acabi.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>ps -o pid,stat,comm</td>
+<td>process status, output (sortida)</td>
+<td>Mostra només les columnes que tries: PID, estat i nom.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>sleep · Ctrl+Z · bg</td>
+<td>dormir · pausa · background (segon pla)</td>
+<td>Crear un procés que només espera, posar un procés en pausa i fer-lo
+        continuar en segon pla.</td>
+</tr>
+<tr>
+<td>Sessió 2</td>
+<td>net user · runas</td>
+<td>usuari de xarxa · executa com a</td>
+<td>Crear usuaris i obrir un programa amb un altre usuari (Windows).</td>
+</tr>
+<tr>
+<td>Sessió 3</td>
+<td>pwd · cd · ls · dir</td>
+<td>print working directory · change directory · list</td>
+<td>On sóc, canviar de carpeta, veure què hi ha.</td>
+</tr>
+<tr>
+<td>Sessió 3</td>
+<td>mkdir · cp · mv · rm</td>
+<td>make directory · copy · move · remove</td>
+<td>Crear carpetes, copiar, moure o reanomenar, esborrar.</td>
+</tr>
+<tr>
+<td>Sessió 3</td>
+<td>touch · ni</td>
+<td>tocar · new item</td>
+<td>Crear un fitxer buit.</td>
+</tr>
+<tr>
+<td>Sessió 3</td>
+<td>find</td>
+<td>trobar</td>
+<td>Busca fitxers pel nom.</td>
+</tr>
+<tr>
+<td>Sessió 3</td>
+<td>file</td>
+<td>fitxer</td>
+<td>Diu el tipus real d’un fitxer mirant-ne el contingut.</td>
+</tr>
+<tr>
+<td>Sessió 4</td>
+<td>whoami · id</td>
+<td>qui sóc · identitat</td>
+<td>El teu usuari i els teus grups.</td>
+</tr>
+<tr>
+<td>Sessió 4</td>
+<td>cat · type</td>
+<td>concatenar · escriure</td>
+<td>Mostra el contingut d’un fitxer de text.</td>
+</tr>
+<tr>
+<td>Sessió 4</td>
+<td>chmod</td>
+<td>change mode</td>
+<td>Canvia els permisos (rwx).</td>
+</tr>
+<tr>
+<td>Sessió 4</td>
+<td>chown</td>
+<td>change owner</td>
+<td>Canvia el propietari (només l’administrador).</td>
+</tr>
+<tr>
+<td>Sessió 4</td>
+<td>icacls</td>
+<td>llista de control d’accés</td>
+<td>Mostra o canvia l’ACL d’un fitxer a Windows.</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>df -hT</td>
+<td>disk free</td>
+<td>Espai i sistema d’arxius de cada volum.</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>lsblk -f</td>
+<td>list block devices, filesystem</td>
+<td>Discos i particions amb el sistema d’arxius de cadascuna
+        (FSTYPE).</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>fsutil file createnew</td>
+<td>utilitat del sistema d’arxius</td>
+<td>Crea un fitxer de prova de la mida indicada.</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>truncate -s</td>
+<td>ajustar la mida (size)</td>
+<td>Crea un fitxer buit de la mida indicada (el disc de joguina).</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>mkfs · dumpe2fs</td>
+<td>make filesystem · bolcat ext2/3/4</td>
+<td>Crear un sistema d’arxius i veure’n les característiques.</td>
+</tr>
+<tr>
+<td>Sessió 5</td>
+<td>grep -i</td>
+<td>cerca un text, sense distingir majúscules (ignore case)</td>
+<td>Mostra només les línies que contenen un text.</td>
+</tr>
+</tbody>
+</table></div>
+<footer class="chap-foot"><button class="btn done-btn" data-done="ca" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="cb" data-sess="ax" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Annexos</span></p>
+  <h1><span class="num">B</span> Glossari</h1>
+</header><div class="filter"><label for="flt-cb">Filtra</label><input data-filter="" id="flt-cb" placeholder="Busca un terme (procés, kernel, NTFS…)" type="search"/></div>
+<div class="tw"><table><thead><tr>
+<th>Terme</th>
+<th>Definició breu</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>ACL</td>
+<td>Llista de control d’accés: permisos detallats per usuari i grup.</td>
+</tr>
+<tr>
+<td>Canonada (|)</td>
+<td>Símbol que passa el resultat d’una ordre a la següent ordre.</td>
+</tr>
+<tr>
+<td>Crida al sistema</td>
+<td>Petició d’un programa al nucli.</td>
+</tr>
+<tr>
+<td>Firmware</td>
+<td>Programari gravat al maquinari que l’inicialitza (BIOS, UEFI).</td>
+</tr>
+<tr>
+<td>Fitxer imatge</td>
+<td>Fitxer normal que fa de disc i pot contenir un sistema d’arxius.
+        Al projecte en diem «disc de joguina».</td>
+</tr>
+<tr>
+<td>GPT</td>
+<td>Manera moderna d’organitzar les particions d’un disc. Es tria en
+        inicialitzar un disc nou.</td>
+</tr>
+<tr>
+<td>grep</td>
+<td>Ordre que mostra només les línies que contenen un text.</td>
+</tr>
+<tr>
+<td>Herència</td>
+<td>Els permisos d’una carpeta passen als fitxers i subcarpetes que
+        conté.</td>
+</tr>
+<tr>
+<td>Inode</td>
+<td>Estructura d’ext4 que guarda les metadades d’un fitxer.</td>
+</tr>
+<tr>
+<td>Instantània (snapshot)</td>
+<td>Còpia de l’estat d’una màquina virtual per poder-hi tornar.</td>
+</tr>
+<tr>
+<td>Journaling</td>
+<td>Registre previ de les operacions per mantenir la coherència del
+        sistema d’arxius.</td>
+</tr>
+<tr>
+<td>Kernel (nucli)</td>
+<td>Part central del sistema operatiu, en mode privilegiat.</td>
+</tr>
+<tr>
+<td>PID</td>
+<td>Identificador de procés.</td>
+</tr>
+<tr>
+<td>Planificador</td>
+<td>Part del nucli que reparteix la CPU entre processos.</td>
+</tr>
+<tr>
+<td>Primer pla / segon pla</td>
+<td>Un procés en primer pla ocupa el terminal; en segon pla treballa
+        i deixa el terminal lliure.</td>
+</tr>
+<tr>
+<td>root</td>
+<td>Administrador de Linux.</td>
+</tr>
+<tr>
+<td>Transacció</td>
+<td>Conjunt d’operacions que s’han de fer totes o cap.</td>
+</tr>
+<tr>
+<td>UTF-8</td>
+<td>Codificació d’Unicode d’1 a 4 bytes per caràcter.</td>
+</tr>
+</tbody>
+</table></div>
+<footer class="chap-foot"><button class="btn done-btn" data-done="cb" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+<article class="chap" id="cc" data-sess="ax" hidden><header class="chap-head">
+  <p class="chap-meta"><span class="sess-chip">Annexos</span></p>
+  <h1><span class="num">C</span> Solucions dels exercicis</h1>
+</header><details class="more reveal"><summary>Mostra les solucions (intenta-ho primer!)</summary><div class="more-body">
+<div class="tw"><table><thead><tr>
+<th>Exercici</th>
+<th>Solució</th>
+</tr></thead>
+<tbody>
+
+<tr>
+<td>4 · 1</td>
+<td>200 = 11001000 = C8</td>
+</tr>
+<tr>
+<td>4 · 2</td>
+<td>11100110 = 230 = E6</td>
+</tr>
+<tr>
+<td>4 · 3</td>
+<td>2<sup>10</sup> = 1 024 valors</td>
+</tr>
+<tr>
+<td>4 · 4</td>
+<td>3 GiB = 3 221 225 472 bytes ≈ 3,22 GB</td>
+</tr>
+<tr>
+<td>4 · 5</td>
+<td>600 MB × 8 = 4 800 Mb; 4 800 / 50 = 96 segons (mínim teòric)</td>
+</tr>
+<tr>
+<td>4 · 6</td>
+<td>«Hi» = 48 69 (2 bytes). «Sí» = 53 C3 AD (3 bytes)</td>
+</tr>
+<tr>
+<td>7 · 1</td>
+<td>rwxrw-r-- = 764: el propietari ho pot tot, el grup llegeix i escriu,
+        els altres només llegeixen</td>
+</tr>
+</tbody>
+</table></div>
+</div></details><footer class="chap-foot"><button class="btn done-btn" data-done="cc" type="button">Marca l’apartat com a llegit</button><div class="pn"></div></footer></article>
+  </main>
+</div>
+<script>
+(function(){
+"use strict";
+const META = {"c1": {"num": "1", "title": "Què és un sistema informàtic?", "sess": "s1"}, "c2": {"num": "2", "title": "Què és un sistema operatiu?", "sess": "s1"}, "c3": {"num": "3", "title": "Interfície gràfica i terminal", "sess": "s1"}, "c4": {"num": "4", "title": "Com representa la informació un ordinador?", "sess": "s1"}, "c5": {"num": "5", "title": "Què és un procés?", "sess": "s2"}, "c6": {"num": "6", "title": "Fitxers i directoris", "sess": "s3"}, "c7": {"num": "7", "title": "Permisos d’arxius i directoris", "sess": "s4"}, "c8": {"num": "8", "title": "Sistemes d’arxius", "sess": "s5"}, "c9": {"num": "9", "title": "Què és el journaling?", "sess": "s5"}, "ca": {"num": "A", "title": "Ordres de referència", "sess": "ax"}, "cb": {"num": "B", "title": "Glossari", "sess": "ax"}, "cc": {"num": "C", "title": "Solucions dels exercicis", "sess": "ax"}};
+const QS = {"1": [{"t": "mc", "q": "Quin component perd la informació quan apaguem l’ordinador?", "o": [{"a": "La memòria RAM", "c": true, "f": "Correcte: la RAM és volàtil, com una taula que es buida en acabar la jornada."}, {"a": "El disc SSD", "c": false, "f": "Un SSD conserva les dades sense corrent: és l’armari."}, {"a": "El disc HDD", "c": false, "f": "Un HDD guarda les dades en plats magnètics i no les perd en apagar."}, {"a": "Una memòria USB", "c": false, "f": "Una memòria USB també conserva les dades sense corrent."}]}, {"t": "drag", "q": "Arrossega cada component al lloc on fa la seva feina.", "l": [["La ", "CPU", " executa les instruccions dels programes."], ["La ", "RAM", " guarda els programes que s’estan executant ara."], ["El ", "disc", " conserva la informació quan apaguem l’equip."], ["El ", "sistema operatiu", " reparteix els recursos entre els programes."]]}, {"t": "tf", "q": "Un nucli (core) i un fil (thread) són exactament el mateix.", "c": false, "f": "Un nucli és una unitat de processament real. Els fils són les tasques que un nucli pot alternar molt ràpidament."}, {"t": "mc", "q": "L’equip A té 8 nuclis i 16 GB de RAM. L’equip B té 16 nuclis i 4 GB de RAM. Quin funcionaria millor com a servidor de màquines virtuals?", "o": [{"a": "L’equip A", "c": true, "f": "Correcte: cada màquina virtual necessita la seva pròpia RAM. Amb 4 GB, l’equip B gairebé no en podria engegar cap."}, {"a": "L’equip B", "c": false, "f": "Té més nuclis, però amb 4 GB de RAM no hi caben les màquines virtuals: la RAM és el límit."}, {"a": "Tots dos igual", "c": false, "f": "No: la RAM disponible limita quantes màquines virtuals es poden executar alhora."}]}], "2": [{"t": "mc", "q": "Quina d’aquestes tasques NO és una funció del sistema operatiu?", "o": [{"a": "Escriure el contingut d’un document de text", "c": true, "f": "Correcte: això ho fa l’usuari amb una aplicació, com un editor de text."}, {"a": "Repartir el temps de CPU entre els programes", "c": false, "f": "Sí que ho fa: és la gestió del processador."}, {"a": "Assignar i alliberar la memòria RAM", "c": false, "f": "Sí que ho fa: és la gestió de memòria."}, {"a": "Controlar els permisos dels usuaris", "c": false, "f": "Sí que ho fa: és la gestió d’usuaris i la protecció."}]}, {"t": "tf", "q": "El kernel (nucli) és la part del sistema operatiu que es comunica directament amb el maquinari.", "c": true, "f": "El kernel controla la CPU, la memòria, els dispositius i els permisos."}, {"t": "tf", "q": "Un driver és un programa que permet al sistema operatiu comunicar-se amb un dispositiu concret.", "c": true, "f": "Sense el driver correcte, el sistema operatiu pot no reconèixer un component."}, {"t": "drag", "q": "Classifica cada sistema operatiu segons el seu camp d’aplicació.", "l": [["Android és un sistema operatiu ", "mòbil", "."], ["Windows 11 és un sistema operatiu d’", "escriptori", "."], ["Ubuntu Server és un sistema operatiu de ", "servidor", "."], ["El sistema d’un router és un sistema ", "encastat", "."]]}], "3": [{"t": "mc", "q": "En l’ordre <code>ls -l Documents<\/code>, què és <code>-l<\/code>?", "o": [{"a": "Una opció: diu com vull el resultat", "c": true, "f": "Correcte: les opcions solen començar amb un guionet."}, {"a": "El nom de l’ordre", "c": false, "f": "El nom de l’ordre és <code>ls<\/code>."}, {"a": "Un argument", "c": false, "f": "L’argument és <code>Documents<\/code>, la carpeta sobre la qual actua."}, {"a": "L’indicador (prompt)", "c": false, "f": "L’indicador és el text que mostra el terminal abans que escriguis."}]}, {"t": "tf", "q": "Al terminal de Linux, <code>Clients<\/code> i <code>clients<\/code> són el mateix nom.", "c": false, "f": "Linux distingeix majúscules i minúscules: són dos noms diferents."}, {"t": "blanks", "q": "Completa els trucs del terminal.", "l": [["La tecla ", "Tab", " completa els noms d’ordres i carpetes."], ["La fletxa ", "amunt", " recupera les ordres que ja has escrit."], ["La combinació ", "Ctrl+C/Ctrl + C", " atura l’ordre que s’està executant."]]}, {"t": "mc", "q": "Què vol dir el missatge «Permission denied»?", "o": [{"a": "El teu usuari no té permís per fer aquella acció", "c": true, "f": "Correcte: el sistema operatiu protegeix el recurs."}, {"a": "Has escrit malament el nom de l’ordre", "c": false, "f": "Llavors sortiria «command not found»."}, {"a": "El fitxer no existeix", "c": false, "f": "Llavors sortiria «No such file or directory»."}, {"a": "L’ordinador està avariat", "c": false, "f": "No: és el sistema operatiu fent la seva feina de protecció."}]}], "4": [{"t": "blanks", "q": "Converteix els nombres. Fes servir la taula de pesos 128 64 32 16 8 4 2 1.", "l": [["13 en binari és ", "1101/00001101", "."], ["1010 en binari és ", "10", " en decimal."], ["255 en hexadecimal és ", "FF", "."], ["2A en hexadecimal és ", "42", " en decimal."]]}, {"t": "mc", "q": "Quants bits té un byte?", "o": [{"a": "8", "c": true, "f": "Correcte: 8 bits formen un byte."}, {"a": "4", "c": false, "f": "4 bits són mig byte, i corresponen a una xifra hexadecimal."}, {"a": "16", "c": false, "f": "16 bits són 2 bytes."}, {"a": "1024", "c": false, "f": "1024 és el nombre de bytes d’un KiB."}]}, {"t": "tf", "q": "Cada xifra hexadecimal equival exactament a 4 bits.", "c": true, "f": "Com que 16 = 2⁴, cada xifra hexadecimal ocupa 4 bits: FF = 1111 1111."}, {"t": "mc", "q": "Per què un disc d’1 TB mostra uns 931 GB a l’ordinador?", "o": [{"a": "El fabricant compta en base 10 i el sistema operatiu en base 2", "c": true, "f": "Correcte: 1 TB = 10¹² bytes, que són uns 931 GiB."}, {"a": "El sistema operatiu ocupa la resta", "c": false, "f": "La diferència apareix fins i tot amb el disc buit."}, {"a": "El disc té sectors defectuosos", "c": false, "f": "No: és una diferència d’unitats, no una avaria."}, {"a": "El disc encara no està formatat", "c": false, "f": "La diferència ve de com es compten els bytes."}]}], "5": [{"t": "mc", "q": "Què és un procés?", "o": [{"a": "Un programa que s’està executant", "c": true, "f": "Correcte: és la recepta mentre algú la cuina."}, {"a": "Un fitxer .exe guardat al disc", "c": false, "f": "Això és un programa: la recepta guardada al llibre."}, {"a": "Una carpeta del sistema", "c": false, "f": "Una carpeta només organitza fitxers."}, {"a": "Una finestra oberta", "c": false, "f": "Molts processos no tenen cap finestra."}]}, {"t": "drag", "q": "Arrossega l’estat que correspon a cada situació.", "l": [["Un procés que només espera que passin 300 segons està ", "esperant", "."], ["Quan la CPU executa les seves instruccions, està ", "executant-se", "."], ["Si l’has posat en pausa amb Ctrl+Z, està ", "aturat", "."], ["Quan ha acabat la feina, està ", "finalitzat", "."]]}, {"t": "tf", "q": "Si tanques un programa i el tornes a obrir, normalment té un PID diferent.", "c": true, "f": "Cada vegada que s’executa es crea un procés nou, amb un número nou."}, {"t": "tf", "q": "Un usuari normal pot donar més prioritat al seu procés amb un valor nice negatiu.", "c": false, "f": "Només l’administrador pot pujar la prioritat. Un usuari normal només la pot baixar."}, {"t": "mc", "q": "Per què un usuari normal no pot executar <code>kill 1<\/code>?", "o": [{"a": "Perquè el procés 1 és de root i no pot aturar processos d’altres usuaris", "c": true, "f": "Correcte: el sistema operatiu protegeix els processos dels altres."}, {"a": "Perquè l’ordre kill no existeix", "c": false, "f": "L’ordre existeix: amb el PID del teu procés funciona."}, {"a": "Perquè el procés 1 ja està aturat", "c": false, "f": "El procés 1 funciona mentre l’equip està engegat."}]}], "6": [{"t": "mc", "q": "Quina d’aquestes rutes és absoluta?", "o": [{"a": "/home/alumne/PROJECTE1/Clients", "c": true, "f": "Correcte: comença a l’arrel (/)."}, {"a": "PROJECTE1/Clients", "c": false, "f": "És relativa: depèn de la carpeta on ets."}, {"a": "../Copies", "c": false, "f": "És relativa: .. vol dir la carpeta de dalt."}, {"a": "Clients", "c": false, "f": "És relativa a la carpeta actual."}]}, {"t": "mc", "q": "A la carpeta hi ha factura1.txt, factura2.txt i factura10.txt. Quins fitxers mostra <code>ls factura?.txt<\/code>?", "o": [{"a": "factura1.txt i factura2.txt", "c": true, "f": "Correcte: ? substitueix exactament un caràcter."}, {"a": "Els tres fitxers", "c": false, "f": "Això ho faria <code>ls factura*.txt<\/code>."}, {"a": "Només factura10.txt", "c": false, "f": "factura10 té dos caràcters després de «factura»."}, {"a": "Cap", "c": false, "f": "Sí que n’hi ha dos que coincideixen."}]}, {"t": "tf", "q": "Si canvies l’extensió d’una foto de .jpg a .txt, el contingut passa a ser text.", "c": false, "f": "L’extensió és només part del nom. El contingut continua essent una imatge, com mostra l’ordre file."}, {"t": "tf", "q": "A Linux, un fitxer és ocult si el seu nom comença amb un punt.", "c": true, "f": "Per exemple .secret.txt. Els veus amb ls -a o amb Ctrl+H a l’explorador."}, {"t": "drag", "q": "On es guarda cada cosa?", "l": [["A Linux, les carpetes dels usuaris són dins de ", "/home", "."], ["A Linux, la configuració del sistema és a ", "/etc", "."], ["A Windows, els programes s’instal·len a ", "Program Files", "."], ["A Windows, les carpetes dels usuaris són dins de ", "Users", "."]]}], "7": [{"t": "blanks", "q": "Passa els permisos de lletres a número (r = 4, w = 2, x = 1).", "l": [["rwx = ", "7", ""], ["r-x = ", "5", ""], ["rw- = ", "6", ""], ["--- = ", "0", ""]]}, {"t": "mc", "q": "Què indiquen els permisos <code>drwxr-x---<\/code>?", "o": [{"a": "Una carpeta: el propietari ho pot tot, el grup pot llegir i entrar, els altres no poden res", "c": true, "f": "Correcte: d = directori, rwx · r-x · ---."}, {"a": "Un fitxer que tothom pot llegir", "c": false, "f": "La d inicial indica una carpeta, i els altres tenen ---."}, {"a": "Una carpeta on el grup pot escriure", "c": false, "f": "El grup té r-x: llegir i entrar, però no escriure."}]}, {"t": "mc", "q": "En una carpeta, què permet el permís x?", "o": [{"a": "Entrar-hi", "c": true, "f": "Correcte: és com obrir la porta."}, {"a": "Veure quins fitxers hi ha", "c": false, "f": "Això és el permís r."}, {"a": "Crear o esborrar fitxers", "c": false, "f": "Això és el permís w."}]}, {"t": "tf", "q": "Un usuari normal de Linux pot regalar un fitxer seu a un altre usuari amb chown.", "c": false, "f": "Canviar el propietari només ho pot fer root. Per això apareix «Operation not permitted»."}, {"t": "tf", "q": "A Windows (NTFS), un permís denegat explícitament té prioritat sobre un permís concedit.", "c": true, "f": "Si un usuari té «Denega» en algun grup, no hi podrà accedir encara que un altre grup li ho permeti."}], "8": [{"t": "mc", "q": "Quin sistema d’arxius no admet fitxers de 4 GiB o més?", "o": [{"a": "FAT32", "c": true, "f": "Correcte: el límit és 4 GiB menys 1 byte."}, {"a": "exFAT", "c": false, "f": "exFAT va néixer precisament per eliminar aquest límit."}, {"a": "NTFS", "c": false, "f": "NTFS admet fitxers enormes."}, {"a": "ext4", "c": false, "f": "ext4 admet fitxers de fins a 16 TiB."}]}, {"t": "drag", "q": "Tria el sistema d’arxius més adequat per a cada cas.", "l": [["Memòria USB amb pel·lícules de 6 GB per fer servir a Windows i a Mac: ", "exFAT", "."], ["Disc del sistema d’un ordinador Windows: ", "NTFS", "."], ["Disc del sistema d’un servidor Linux: ", "ext4", "."], ["Memòria USB petita per a un aparell antic que només llegeix el format més compatible: ", "FAT32", "."]]}, {"t": "mc", "q": "Quin d’aquests sistemes d’arxius guarda permisos d’usuari (la pestanya Seguretat de Windows)?", "o": [{"a": "NTFS", "c": true, "f": "Correcte: NTFS guarda una llista de control d’accés (ACL)."}, {"a": "FAT32", "c": false, "f": "FAT32 no guarda permisos: qualsevol persona el pot llegir."}, {"a": "exFAT", "c": false, "f": "exFAT tampoc no guarda permisos."}]}, {"t": "tf", "q": "Formatar un volum esborra el que contenia.", "c": true, "f": "Per això només es formaten discos de prova i es comprova dues vegades la lletra d’unitat."}], "9": [{"t": "mc", "q": "Què fa el journaling?", "o": [{"a": "Apunta les operacions abans de fer-les per recuperar un estat coherent si hi ha un tall", "c": true, "f": "Correcte: és la llibreta d’apunts del sistema d’arxius."}, {"a": "Fa una còpia de seguretat de tots els fitxers", "c": false, "f": "No és una còpia de seguretat."}, {"a": "Comprimeix els fitxers", "c": false, "f": "La compressió és una altra característica."}, {"a": "Xifra el disc", "c": false, "f": "El xifratge és una altra característica."}]}, {"t": "mc", "q": "Quins d’aquests sistemes d’arxius tenen journaling? (Pots marcar-ne més d’un.)", "o": [{"a": "NTFS", "c": true, "f": "Correcte."}, {"a": "ext4", "c": true, "f": "Correcte: has vist <code>has_journal<\/code> a la sessió 5."}, {"a": "FAT32", "c": false, "f": "FAT32 no té journaling."}, {"a": "exFAT", "c": false, "f": "exFAT no té journaling: cal expulsar el disc abans de treure’l."}]}, {"t": "tf", "q": "El journaling permet recuperar un fitxer que has esborrat per error.", "c": false, "f": "El journaling manté el sistema d’arxius coherent, però no recupera fitxers esborrats. Per això calen còpies de seguretat."}, {"t": "blanks", "q": "Completa el que vas comprovar a Linux.", "l": [["La característica ", "has_journal", " indica que un sistema ext té journaling."], ["El sistema d’arxius ", "ext2", " no té journaling; el seu successor ext4, sí."]]}]};
+const ORDER = Object.keys(META);
+const $ = (s, r=document) => r.querySelector(s);
+const $$ = (s, r=document) => Array.from(r.querySelectorAll(s));
+const el = (tag, attrs={}, ...kids) => { const e = document.createElement(tag);
+  for (const [k,v] of Object.entries(attrs)) { if (k === 'class') e.className = v; else if (k === 'html') e.innerHTML = v; else if (k.startsWith('on')) e.addEventListener(k.slice(2), v); else e.setAttribute(k, v); }
+  for (const k of kids) if (k != null) e.append(k); return e; };
+const shuffle = a => { a = a.slice(); for (let i=a.length-1;i>0;i--){ const j=Math.floor(Math.random()*(i+1)); [a[i],a[j]]=[a[j],a[i]]; } return a; };
+const norm = s => s.toLowerCase().normalize('NFD').replace(/[̀-ͯ]/g,'').replace(/[’']/g,"'").replace(/\s+/g,' ').trim();
+
+/* ---------- progrés (només en aquest navegador) ---------- */
+const KEY = 'p1-teoria-web';
+let S = {done:{}, best:{}, last:''};
+try { const raw = localStorage.getItem(KEY); if (raw) S = Object.assign(S, JSON.parse(raw)); } catch(e) {}
+const save = () => { try { localStorage.setItem(KEY, JSON.stringify(S)); } catch(e) {} };
+
+function refreshProgress(){
+  const chs = ORDER.filter(k => /^c\d$/.test(k));
+  const n = chs.filter(k => S.done[k]).length;
+  const pct = Math.round(100*n/chs.length);
+  $('#pbarI').style.width = pct + '%';
+  $('#progTxt').textContent = n + ' de ' + chs.length + ' apartats llegits';
+  $('#progMini').textContent = n + '/' + chs.length + ' llegits';
+  $$('[data-nav]').forEach(a => { const st = $('.st', a); st.classList.toggle('done', !!S.done[a.dataset.nav]); });
+  $$('[data-done]').forEach(b => { const d = !!S.done[b.dataset.done]; b.classList.toggle('is-done', d); b.textContent = d ? '✔ Llegit (toca per desmarcar)' : 'Marca l’apartat com a llegit'; });
+  const next = chs.find(k => !S.done[k]);
+  const sb = $('#startBtn');
+  if (n === 0) { sb.textContent = 'Comença per l’apartat 1'; sb.href = '#c1'; }
+  else if (next) { sb.textContent = 'Continua: apartat ' + META[next].num; sb.href = '#' + next; }
+  else { sb.textContent = 'Ho has llegit tot. Repassa el glossari'; sb.href = '#cb'; }
+  $$('#sessCards .tick').forEach(t => { t.textContent = S.done[t.dataset.k] ? '✔' : '○'; });
+}
+
+/* ---------- navegació ---------- */
+const side = $('#side'), menuBtn = $('#menuBtn');
+menuBtn.addEventListener('click', () => { const o = side.classList.toggle('open'); menuBtn.setAttribute('aria-expanded', o); });
+side.addEventListener('click', e => { if (e.target.closest('a')) { side.classList.remove('open'); menuBtn.setAttribute('aria-expanded', 'false'); } });
+document.addEventListener('click', e => { if (side.classList.contains('open') && !side.contains(e.target) && e.target !== menuBtn) { side.classList.remove('open'); menuBtn.setAttribute('aria-expanded','false'); } });
+
+const views = $$('#main > article');
+let current = null;
+function show(id, targetEl){
+  const art = document.getElementById(id);
+  if (!art) return;
+  if (current !== id){
+    views.forEach(v => v.hidden = v.id !== id);
+    current = id;
+    $$('[data-nav]').forEach(a => a.classList.toggle('on', a.dataset.nav === id));
+    if (id !== 'inici') { S.last = id; save(); initQuiz(art); }
+    document.title = id === 'inici' ? 'Anatomia d’un sistema operatiu' : META[id].num + '. ' + META[id].title + ' · P1';
+  }
+  if (targetEl && targetEl !== art){
+    const d = targetEl.closest('details'); if (d) d.open = true;
+    requestAnimationFrame(() => { targetEl.scrollIntoView({block:'start'}); targetEl.classList.remove('flash'); void targetEl.offsetWidth; targetEl.classList.add('flash'); });
+  } else window.scrollTo(0, 0);
+}
+function route(){
+  const h = decodeURIComponent(location.hash.slice(1));
+  if (!h || h === 'inici') return show('inici');
+  const t = document.getElementById(h);
+  if (!t) return show('inici');
+  const art = t.closest('#main > article');
+  show(art.id, t);
+}
+window.addEventListener('hashchange', route);
+
+ORDER.forEach((k, i) => {
+  const art = document.getElementById(k); const pn = $('.pn', art);
+  const prev = ORDER[i-1], next = ORDER[i+1];
+  if (prev) pn.append(el('a', {href:'#'+prev}, el('span', {}, '← Anterior'), META[prev].num + '. ' + META[prev].title));
+  if (next) pn.append(el('a', {href:'#'+next}, el('span', {}, 'Següent →'), META[next].num + '. ' + META[next].title));
+});
+$$('[data-done]').forEach(b => b.addEventListener('click', () => { const k = b.dataset.done; S.done[k] = !S.done[k]; save(); refreshProgress(); }));
+
+/* ---------- portada ---------- */
+const OFFICE = [
+  ['Les persones que treballen','CPU i nuclis','c1','La CPU executa les instruccions. Cada nucli és una persona que pot fer una feina alhora: més nuclis, més feines en paral·lel.','lscpu · Administrador de tasques ▸ Rendiment'],
+  ['La taula de treball','Memòria RAM','c1','Hi tens els papers que fas servir ara mateix. És ràpida però, quan acaba la jornada (apagues), es buida.','free -h · Administrador de tasques ▸ Memòria'],
+  ['L’armari','Disc (HDD o SSD)','c1','Hi guardes tot el que no fas servir ara. És més lent que la taula, però no s’oblida de res quan apagues.','lsblk · Gestió de discs'],
+  ['El gerent','Sistema operatiu','c2','Decideix qui treballa, quanta taula li toca i qui pot obrir cada armari. Ningú toca res sense passar per ell.','uname -a · winver'],
+  ['Una feina en curs','Procés','c5','El programa és la recepta; el procés és algú cuinant-la ara mateix. Cada feina té un número: el PID.','ps · top · tasklist'],
+  ['La manera d’ordenar l’armari','Sistema d’arxius','c8','FAT32, exFAT, NTFS o ext4: cada un ordena l’armari d’una manera i té les seves normes i límits.','lsblk -f · Gestió de discs'],
+  ['Les claus','Permisos','c7','Qui pot llegir, escriure o obrir cada carpeta. El gerent revisa la clau cada vegada que algú hi vol entrar.','ls -l · chmod · icacls'],
+  ['La llibreta','Journaling','c9','Abans de moure res, el gerent apunta què farà. Si se’n va la llum, en tornar llegeix la llibreta i deixa l’armari en ordre.','dumpe2fs · fsutil dirty query'],
+];
+const office = $('#office'), ocOut = $('#ocOut');
+function pickOffice(i){
+  $$('.oc', office).forEach((b, j) => { b.classList.toggle('on', i === j); b.setAttribute('aria-pressed', i === j); });
+  const o = OFFICE[i];
+  ocOut.innerHTML = '';
+  ocOut.append(el('p', {class:'eyebrow'}, o[0] + ' = '), el('h3', {}, o[1]), el('p', {}, o[3]),
+    el('p', {class:'small'}, 'On ho veuràs: ', el('code', {}, o[4])), el('a', {href:'#'+o[2]}, 'Llegeix l’apartat ' + META[o[2]].num + ' →'));
+}
+OFFICE.forEach((o, i) => office.append(el('button', {class:'oc', type:'button', 'aria-pressed':'false', onclick:() => pickOffice(i)}, el('b', {}, o[0]), el('span', {}, '= ' + o[1]))));
+pickOffice(0);
+
+const SESSN = {s1:'Sessió 1 · Radiografia del sistema', s2:'Sessió 2 · Processos sota observació', s3:'Sessió 3 · Mapa del sistema d’arxius', s4:'Sessió 4 · Gestió de permisos', s5:'Sessió 5 · Quin sistema d’arxius triaries?', ax:'Annexos de consulta'};
+const READ = {s1:['c1','c2','c3','c4'], s2:['c5','c7'], s3:['c6'], s4:['c7'], s5:['c8','c9'], ax:['ca','cb','cc']};
+Object.entries(READ).forEach(([s, ks]) => {
+  const ul = el('ul');
+  ks.forEach(k => ul.append(el('li', {}, el('span', {class:'tick', 'data-k':k}, '○'), el('a', {href:'#'+k}, META[k].num + '. ' + META[k].title + (s === 's2' && k === 'c7' ? ' (7.1 i 7.2)' : '')))));
+  $('#sessCards').append(el('div', {class:'sc', 'data-sess':s}, el('h3', {}, SESSN[s]), ul));
+});
+const TOOLN = [['bin','Taula de pesos','Binari, decimal i hexadecimal','s1'],['units','GB o GiB?','Per què el disc «fa menys»','s1'],['proc','Estats d’un procés','Mou un procés amb Ctrl+Z, bg i kill','s2'],['glob','Comodins','Prova *, ? i [ ] amb fitxers','s3'],['perm','Calculadora de permisos','rwx ↔ 750 ↔ chmod','s4'],['fs','Quin sistema d’arxius?','Tria segons el que necessites','s5'],['journal','Tall de llum','Què passa amb i sense journaling','s5']];
+TOOLN.forEach(([t, n, d, s]) => { const tgt = document.querySelector('[data-tool="'+t+'"]'); if (!tgt) return; tgt.id = 'eina-' + t;
+  $('#toolCards').append(el('div', {class:'sc', 'data-sess':s}, el('h3', {}, el('a', {href:'#eina-'+t}, n)), el('p', {class:'small', style:'margin:0'}, d))); });
+
+/* ---------- codi: botó de copiar ---------- */
+$$('.code').forEach(c => { const b = el('button', {class:'copy', type:'button'}, 'Copia'); c.append(b);
+  b.addEventListener('click', () => { const t = $('pre', c).innerText;
+    const ok = () => { b.textContent = 'Copiat'; setTimeout(() => b.textContent = 'Copia', 1400); };
+    try { navigator.clipboard.writeText(t).then(ok, () => selectPre(c)); } catch(e) { selectPre(c); } }); });
+function selectPre(c){ const r = document.createRange(); r.selectNodeContents($('pre', c)); const s = getSelection(); s.removeAllRanges(); s.addRange(r); }
+
+/* ---------- filtres dels annexos ---------- */
+$$('[data-filter]').forEach(inp => inp.addEventListener('input', () => {
+  const q = norm(inp.value); const art = inp.closest('article');
+  $$('tbody tr', art).forEach(tr => { tr.hidden = q && !norm(tr.textContent).includes(q); });
+  $$('h2,h3', art).forEach(h => {});
+}));
+
+/* ---------- cerca ---------- */
+const IDX = []; let uid = 0;
+ORDER.forEach(k => { const art = document.getElementById(k); let head = META[k].num + '. ' + META[k].title, headId = k;
+  $$('h2,h3,h4,p,li,td,summary', art).forEach(n => {
+    if (n.closest('.quiz,.tool,.chap-head,.ontoc,.chap-foot')) return;
+    if (/^H[234]$/.test(n.tagName) && n.closest('details') == null || n.tagName === 'SUMMARY') { if (!n.id) n.id = 'x' + (++uid); head = n.textContent.replace('Per saber-ne més','').trim(); headId = n.id; }
+    const t = n.textContent.replace(/\s+/g,' ').trim(); if (!t) return;
+    if (n.tagName === 'TD' || n.tagName === 'LI' || n.tagName === 'P') { if (!n.id) n.id = 'x' + (++uid); }
+    IDX.push({k, head, id: n.id || headId, t, n: norm(t)});
+  });
+});
+const qIn = $('#q'), res = $('#results'); let sel = -1;
+function esc(s){ return s.replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c])); }
+function snippet(t, q){
+  const nt = norm(t); const i = nt.indexOf(q); const a = Math.max(0, i - 50), b = Math.min(t.length, i + q.length + 70);
+  return (a ? '…' : '') + esc(t.slice(a, i)) + '<mark>' + esc(t.slice(i, i + q.length)) + '</mark>' + esc(t.slice(i + q.length, b)) + (b < t.length ? '…' : '');
+}
+function doSearch(){
+  const q = norm(qIn.value); res.innerHTML = ''; sel = -1;
+  if (q.length < 2) { res.hidden = true; return; }
+  const seen = new Set(); const hits = [];
+  for (const it of IDX) { if (!it.n.includes(q)) continue; const key = it.k + '|' + it.head; if (seen.has(key)) continue; seen.add(key); hits.push(it); if (hits.length >= 14) break; }
+  if (!hits.length) res.append(el('div', {class:'none'}, 'No he trobat «' + qIn.value + '». Prova una altra paraula o mira el glossari.'));
+  hits.forEach(it => { const a = el('a', {href:'#'+it.id, 'data-sess':META[it.k].sess});
+    a.innerHTML = '<span class="r-where">' + esc(META[it.k].num + '. ' + META[it.k].title) + '</span><b>' + esc(it.head) + '</b><span class="r-snip">' + snippet(it.t, q) + '</span>';
+    a.addEventListener('click', () => { res.hidden = true; if (location.hash === '#' + it.id) route(); });
+    res.append(a); });
+  res.hidden = false;
+}
+qIn.addEventListener('input', doSearch);
+qIn.addEventListener('focus', () => { if (qIn.value.trim().length > 1) doSearch(); });
+qIn.addEventListener('keydown', e => { const as = $$('a', res); if (!as.length) return;
+  if (e.key === 'ArrowDown' || e.key === 'ArrowUp') { e.preventDefault(); sel = (sel + (e.key === 'ArrowDown' ? 1 : -1) + as.length) % as.length; as.forEach((a, i) => a.classList.toggle('sel', i === sel)); as[sel].scrollIntoView({block:'nearest'}); }
+  else if (e.key === 'Enter') { e.preventDefault(); (as[sel] || as[0]).click(); }
+  else if (e.key === 'Escape') { res.hidden = true; } });
+document.addEventListener('click', e => { if (!e.target.closest('.search')) res.hidden = true; });
+
+/* ---------- preguntes ---------- */
+function initQuiz(art){
+  const box = $('.quiz', art); if (!box || box.dataset.ready) return; box.dataset.ready = '1'; buildQuiz(box);
+}
+function buildQuiz(box){
+  const n = box.dataset.quiz, items = QS[n] || [], list = $('.qlist', box), score = $('.qscore', box);
+  list.innerHTML = ''; score.textContent = '';
+  const st = items.map(() => null);
+  const best = S.best[n];
+  if (best != null) score.textContent = 'La teva millor puntuació: ' + best + ' de ' + items.length + '.';
+  const finish = (i, ok) => {
+    if (st[i] !== null) return; st[i] = ok;
+    if (st.every(x => x !== null)) {
+      const got = st.filter(Boolean).length;
+      if (S.best[n] == null || got > S.best[n]) { S.best[n] = got; save(); }
+      score.innerHTML = '';
+      score.append(got === items.length ? '★ Perfecte: ' : 'Has encertat ', String(got), ' de ', String(items.length), got === items.length ? ' a la primera.' : ' a la primera. ',
+        el('button', {class:'btn ghost', type:'button', style:'margin-left:8px', onclick:() => buildQuiz(box)}, 'Torna-ho a provar'));
+    }
+  };
+  items.forEach((it, i) => {
+    const q = el('div', {class:'q'});
+    const fb = el('p', {class:'fb', hidden:''});
+    const say = (ok, txt) => { fb.hidden = false; fb.className = 'fb ' + (ok ? 'ok' : 'ko'); fb.textContent = (ok ? '✔ ' : '✘ ') + txt; };
+    q.append(el('p', {class:'qq'}, el('span', {class:'qn'}, (i+1) + '.'), it.q));
+    if (it.t === 'mc' || it.t === 'tf') {
+      const opts = it.t === 'mc' ? shuffle(it.o) : [{a:'Cert', c:it.c === true}, {a:'Fals', c:it.c === false}];
+      const wrap = el('div', {class: it.t === 'mc' ? 'opts' : 'tf'});
+      opts.forEach(o => { const b = el('button', {class:'opt', type:'button'}, o.a);
+        b.addEventListener('click', () => {
+          if (o.c) { b.classList.add('right'); $$('.opt', wrap).forEach(x => x.disabled = true); say(true, it.t === 'mc' ? o.f : 'Correcte. ' + it.f); finish(i, true); }
+          else { b.classList.add('wrong'); b.disabled = true; say(false, it.t === 'mc' ? o.f + ' Torna-ho a provar.' : 'No ben bé. ' + it.f); finish(i, false); if (it.t === 'tf') { $$('.opt', wrap).forEach(x => { x.disabled = true; if (x !== b) x.classList.add('right'); }); } }
+        });
+        wrap.append(b); });
+      q.append(wrap);
+    } else if (it.t === 'blanks') {
+      const ins = [];
+      it.l.forEach(parts => { const line = el('p', {class:'bl-line'});
+        parts.forEach((p, j) => { if (j % 2 === 0) line.append(p); else { const alts = p.split('/').map(norm);
+          const inp = el('input', {class:'bl-in', type:'text', 'aria-label':'Resposta', autocomplete:'off', spellcheck:'false', style:'width:' + Math.max(6, p.split('/')[0].length + 3) + 'ch'});
+          inp._alts = alts; inp._sol = p.split('/')[0]; ins.push(inp); line.append(inp); } });
+        q.append(line); });
+      const chk = el('button', {class:'btn', type:'button'}, 'Comprova');
+      const sol = el('button', {class:'btn ghost', type:'button'}, 'Mostra la solució');
+      chk.addEventListener('click', () => { let good = 0;
+        ins.forEach(inp => { const ok = inp._alts.includes(norm(inp.value)); inp.classList.toggle('right', ok); inp.classList.toggle('wrong', !ok); if (ok) good++; });
+        const all = good === ins.length; say(all, all ? 'Totes correctes.' : good + ' de ' + ins.length + ' correctes. Revisa les vermelles.'); finish(i, all); });
+      sol.addEventListener('click', () => { ins.forEach(inp => { inp.value = inp._sol; inp.classList.add('right'); inp.classList.remove('wrong'); }); finish(i, false); say(true, 'Aquestes són les respostes. Llegeix-les en veu alta i entén per què.'); });
+      q.append(el('div', {class:'q-actions'}, chk, sol));
+    } else if (it.t === 'drag') {
+      const slots = []; const words = [];
+      const bank = el('div', {class:'bank', 'aria-label':'Paraules disponibles'});
+      q.append(el('p', {class:'small', style:'margin:-4px 0 6px'}, 'Toca una paraula i després el buit on va (o toca un buit ple per buidar-lo).'), bank);
+      let picked = null;
+      it.l.forEach(parts => { const line = el('p', {class:'bl-line'});
+        parts.forEach((p, j) => { if (j % 2 === 0) line.append(p); else { words.push(p);
+          const s = el('button', {class:'slot empty', type:'button'}, '______'); s._ans = p; s._val = null; slots.push(s); line.append(s); } });
+        q.append(line); });
+      const chips = shuffle(words).map(w => { const c = el('button', {class:'chip', type:'button'}, w); c._w = w; return c; });
+      chips.forEach(c => bank.append(c));
+      const place = (s, c) => { if (s._val) unplace(s); s._val = c; s.textContent = c._w; s.classList.remove('empty','right','wrong'); c.hidden = true; c.classList.remove('picked'); picked = null; };
+      const unplace = s => { if (!s._val) return; s._val.hidden = false; s._val = null; s.textContent = '______'; s.classList.add('empty'); s.classList.remove('right','wrong'); };
+      chips.forEach(c => c.addEventListener('click', () => {
+        if (picked === c) { c.classList.remove('picked'); picked = null; return; }
+        chips.forEach(x => x.classList.remove('picked')); picked = c; c.classList.add('picked');
+      }));
+      slots.forEach(s => s.addEventListener('click', () => { if (picked) place(s, picked); else unplace(s); }));
+      const chk = el('button', {class:'btn', type:'button'}, 'Comprova');
+      chk.addEventListener('click', () => {
+        if (slots.some(s => !s._val)) { say(false, 'Encara queden buits per omplir.'); return; }
+        let good = 0; slots.forEach(s => { const ok = s._val._w === s._ans; s.classList.toggle('right', ok); s.classList.toggle('wrong', !ok); if (ok) good++; });
+        const all = good === slots.length; say(all, all ? 'Tot al seu lloc.' : good + ' de ' + slots.length + ' ben col·locades. Toca les vermelles per treure-les i torna-ho a provar.'); finish(i, all); });
+      q.append(el('div', {class:'q-actions'}, chk));
+    }
+    q.append(fb); list.append(q);
+  });
+}
+
+/* ---------- eines interactives ---------- */
+function card(title, kind, body){ return el('div', {class:'tool-card'}, el('div', {class:'tool-head'}, el('span', {}, kind), el('b', {}, title)), body); }
+const TOOLS = {};
+
+TOOLS.bin = host => {
+  const body = el('div', {class:'tool-body'}); const bits = el('div', {class:'bits gap4'}); const W = [128,64,32,16,8,4,2,1]; const v = [0,0,0,0,0,0,0,0];
+  const sum = el('p', {class:'out'}), dec = el('span', {class:'big'}), bin = el('span', {class:'big'}), hex = el('span', {class:'big'}), msg = el('div', {class:'msg info', 'aria-live':'polite'});
+  const inp = el('input', {class:'field', type:'number', min:'0', max:'255', id:'bin-dec', style:'width:7ch', 'aria-label':'Número decimal'});
+  let target = null;
+  const btns = W.map((w, i) => { const b = el('button', {class:'bit', type:'button', 'aria-pressed':'false', 'aria-label':'Bit de pes ' + w}, el('span', {class:'w'}, String(w)), el('span', {class:'v'}, '0'));
+    b.addEventListener('click', () => { v[i] ^= 1; upd(); }); bits.append(b); return b; });
+  function upd(){
+    const n = v.reduce((a, b, i) => a + b*W[i], 0);
+    btns.forEach((b, i) => { b.classList.toggle('on', !!v[i]); $('.v', b).textContent = v[i]; b.setAttribute('aria-pressed', !!v[i]); });
+    const on = W.filter((w, i) => v[i]); sum.textContent = on.length ? on.join(' + ') + ' = ' + n : 'Tots els bits apagats = 0';
+    const s = v.join(''); bin.textContent = s.slice(0,4) + ' ' + s.slice(4);
+    hex.textContent = n.toString(16).toUpperCase().padStart(2,'0'); dec.textContent = n;
+    if (target !== null) { if (n === target) { msg.className = 'msg ok'; msg.textContent = '✔ Aconseguit! ' + target + ' = ' + s.slice(0,4) + ' ' + s.slice(4) + ' en binari = ' + hex.textContent + ' en hexadecimal.'; target = null; }
+      else { msg.className = 'msg info'; msg.textContent = 'Repte: forma el número ' + target + '. Ara tens ' + n + (n > target ? '. Te n’has passat: apaga algun bit.' : '. Et falten ' + (target - n) + '.'); } }
+  }
+  inp.addEventListener('input', () => { let n = parseInt(inp.value, 10); if (isNaN(n)) return; n = Math.max(0, Math.min(255, n)); W.forEach((w, i) => { v[i] = (n & w) ? 1 : 0; }); target = null; msg.className = 'msg info'; msg.textContent = 'Fixa’t: comences pel pes més gran que hi cap i vas restant.'; upd(); });
+  const newT = el('button', {class:'btn', type:'button'}, 'Nou repte');
+  newT.addEventListener('click', () => { target = 1 + Math.floor(Math.random()*254); v.fill(0); inp.value = ''; upd(); });
+  const clr = el('button', {class:'btn ghost', type:'button', onclick:() => { v.fill(0); target = null; msg.className = 'msg info'; msg.textContent = 'Toca els bits per encendre’ls (1) o apagar-los (0).'; upd(); }}, 'Esborra');
+  body.append(el('p', {}, 'Cada casella és un bit. El número de dalt és el seu pes. Encén els bits i suma els pesos: així es passa de binari a decimal.'), bits, sum,
+    el('dl', {class:'kv'}, el('dt', {}, 'Decimal'), el('dd', {}, dec), el('dt', {}, 'Binari'), el('dd', {}, bin), el('dt', {}, 'Hexadecimal'), el('dd', {}, hex)),
+    el('div', {class:'row', style:'margin-top:12px'}, el('label', {for:'bin-dec'}, 'O escriu un decimal (0–255):'), inp, newT, clr), msg);
+  host.append(card('Taula de pesos', 'Simulador', body));
+  W.forEach((w, i) => { v[i] = (180 & w) ? 1 : 0; }); msg.textContent = 'Exemple de la teoria: 180 = 128 + 32 + 16 + 4. Prova ara amb «Nou repte».'; upd();
+};
+
+TOOLS.units = host => {
+  const body = el('div', {class:'tool-body'});
+  const n = el('input', {class:'field', type:'number', min:'1', value:'500', id:'u-n', style:'width:9ch'});
+  const u = el('select', {class:'field', id:'u-u', 'aria-label':'Unitat'}); [['GB',1e9],['TB',1e12]].forEach(([t, f]) => u.append(el('option', {value:f}, t)));
+  const out = el('div', {class:'msg info', 'aria-live':'polite'});
+  const fmt = (x, d=2) => x.toLocaleString('ca-ES', {maximumFractionDigits:d});
+  function upd(){ const v = parseFloat(n.value) || 0, f = +u.value, bytes = v*f, isT = f === 1e12;
+    const gi = bytes/2**30, ti = bytes/2**40;
+    out.innerHTML = ''; out.append(el('p', {}, el('b', {}, fmt(v,0) + ' ' + (isT ? 'TB' : 'GB')), ' (com compta el fabricant, en base 10) = ', el('code', {}, fmt(bytes,0) + ' bytes')),
+      el('p', {}, 'El sistema operatiu divideix entre 1 024 i mostra ', el('b', {}, isT ? fmt(ti) + ' TiB (' + fmt(gi,0) + ' GiB)' : fmt(gi) + ' GiB'), '. Windows ho escriu «GB», però en realitat són GiB.'),
+      el('p', {class:'small'}, 'La diferència és d’un ' + fmt(100*(1 - (isT ? ti : gi)/v),1) + '%. No falta res: és el mateix disc comptat amb dues unitats diferents.')); }
+  n.addEventListener('input', upd); u.addEventListener('change', upd);
+  body.append(el('div', {class:'row'}, el('label', {for:'u-n'}, 'Capacitat que diu la caixa:'), n, u), out);
+  host.append(card('GB o GiB?', 'Calculadora', body)); upd();
+};
+
+TOOLS.proc = host => {
+  const body = el('div', {class:'tool-body'});
+  const N = {nou:['Nou',20,30], prep:['Preparat',170,30], exe:['En execució',340,30], fin:['Finalitzat',510,30], bloq:['Bloquejat',255,140], atur:['Aturat',470,140]};
+  const INFO = {
+    nou:['—','Acabes de fer doble clic o d’escriure l’ordre. El SO li assigna un PID i el prepara.','La feina ha entrat per la porta de l’oficina.'],
+    prep:['R','Està llest i espera el seu torn per fer servir un nucli.','La feina és sobre la taula, esperant que una persona quedi lliure.'],
+    exe:['R','Un nucli està executant les seves instruccions ara mateix.','Una persona hi està treballant.'],
+    bloq:['S','Espera alguna cosa: que premis una tecla, que arribi una dada del disc o que passi el temps d’un sleep.','La feina està aparcada esperant una trucada.'],
+    atur:['T','L’has aturat amb Ctrl+Z. No fa res fins que el reprenguis amb bg o fg.','El gerent ha dit «para» i la feina queda en pausa.'],
+    fin:['(desapareix)','Ha acabat o l’has tancat amb kill. El SO allibera la RAM que feia servir. Ja no surt a ps.','Feina acabada: la taula queda lliure.']};
+  const EV = [
+    ['El SO el carrega a la RAM', ['nou'], 'prep'],
+    ['El planificador li dona un nucli', ['prep'], 'exe'],
+    ['S’acaba el seu torn', ['exe'], 'prep'],
+    ['Espera una dada (teclat, disc, sleep)', ['exe'], 'bloq'],
+    ['Arriba la dada que esperava', ['bloq'], 'prep'],
+    ['Prems Ctrl+Z', ['exe','prep','bloq'], 'atur'],
+    ['Escrius bg (continua de fons)', ['atur'], 'prep'],
+    ['Acaba o fas kill PID', ['exe','prep','bloq','atur'], 'fin'],
+  ];
+  let cur = 'nou';
+  const NS = 'http://www.w3.org/2000/svg';
+  const svg = document.createElementNS(NS, 'svg'); svg.setAttribute('viewBox', '0 0 640 250'); svg.setAttribute('role', 'img'); svg.setAttribute('aria-label', 'Diagrama d’estats d’un procés');
+  svg.innerHTML = '<defs><marker id="ah" viewBox="0 0 10 10" refX="9" refY="5" markerWidth="7" markerHeight="7" orient="auto-start-reverse"><path d="M0,0 L10,5 L0,10 z" fill="var(--muted)"/></marker></defs>' +
+    [['M130,50 L168,50'],['M280,43 L338,43'],['M340,58 L282,58'],['M450,50 L508,50'],['M378,72 L330,138'],['M282,138 L240,72'],['M430,72 L500,138'],['M470,172 Q 150,250 210,74']].map(([d]) => '<path class="arrow" d="'+d+'" marker-end="url(#ah)"/>').join('');
+  const gs = {};
+  Object.entries(N).forEach(([k, [t, x, y]]) => { const g = document.createElementNS(NS, 'g'); g.setAttribute('class', 'st-node');
+    g.innerHTML = '<rect x="'+x+'" y="'+y+'" width="110" height="40" rx="10"/><text x="'+(x+55)+'" y="'+(y+25)+'" text-anchor="middle">'+t+'</text>'; svg.append(g); gs[k] = g; });
+  const info = el('div', {class:'msg info', 'aria-live':'polite'}); const evs = el('div', {class:'evs'});
+  const reset = el('button', {class:'btn ghost', type:'button'}, 'Torna a començar');
+  const btns = EV.map(([t, from, to]) => { const b = el('button', {class:'ev', type:'button'}, t); b.addEventListener('click', () => { cur = to; upd(); }); evs.append(b); return b; });
+  reset.addEventListener('click', () => { cur = 'nou'; upd(); });
+  function upd(){ Object.entries(gs).forEach(([k, g]) => g.classList.toggle('cur', k === cur));
+    btns.forEach((b, i) => b.disabled = !EV[i][1].includes(cur));
+    const [stat, what, office] = INFO[cur]; info.innerHTML = '';
+    info.append(el('p', {}, el('b', {}, N[cur][0] + '. '), what), el('p', {class:'small'}, 'A l’oficina: ' + office + ' · Columna STAT de ps: ', el('code', {}, stat))); }
+  body.append(el('p', {}, 'Fes avançar un procés (per exemple, ', el('code', {}, 'sleep 300'), ') prement els esdeveniments. Només s’activen els que poden passar des de l’estat actual.'), el('div', {class:'svgwrap'}, svg), info, evs, el('div', {class:'row', style:'margin-top:10px'}, reset));
+  host.append(card('Estats d’un procés', 'Simulador', body)); upd();
+};
+
+TOOLS.glob = host => {
+  const FILES = ['factura1.txt','factura2.txt','factura10.txt','pressupost1.txt','pressupost2.txt','Factura3.txt','foto.jpg','informe.pdf','notes.txt'];
+  const body = el('div', {class:'tool-body'});
+  const inp = el('input', {class:'field', id:'glob-in', type:'text', value:'factura?.txt', spellcheck:'false', autocomplete:'off', style:'font-family:var(--f-mono);width:16ch'});
+  const grid = el('div', {class:'files'}); const out = el('div', {class:'msg info', 'aria-live':'polite'});
+  const fs = FILES.map(f => { const d = el('div', {class:'file'}, f); grid.append(d); return d; });
+  const toRe = p => new RegExp('^' + p.replace(/[.+^${}()|\\]/g, '\\$&').replace(/\*/g, '.*').replace(/\?/g, '.') + '$');
+  function upd(){ const p = inp.value.trim(); let re; try { re = toRe(p || '*'); } catch(e) { out.className = 'msg ko'; out.textContent = 'Aquest patró té un error (potser falta tancar un claudàtor ]).'; return; }
+    let n = 0; fs.forEach((d, i) => { const h = re.test(FILES[i]); d.classList.toggle('hit', h); if (h) n++; });
+    out.className = 'msg info'; out.innerHTML = '';
+    out.append(el('p', {}, el('b', {}, n + (n === 1 ? ' fitxer coincideix' : ' fitxers coincideixen')), ' amb ', el('code', {}, p || '*'), '.'),
+      el('p', {class:'small'}, 'A Linux: ', el('code', {}, 'ls ' + (p || '*')), ' · A Windows (PowerShell): ', el('code', {}, 'dir ' + (p || '*')),
+        /\[/.test(p) ? ' · Els claudàtors [ ] funcionen a Linux i a PowerShell, però no al cmd clàssic.' : '',
+        /F/.test(p) || /f/.test(p) ? ' · Linux distingeix majúscules: «Factura3» no és «factura3».' : ''));
+  }
+  inp.addEventListener('input', upd);
+  const pres = el('div', {class:'presets'}); ['*','*.txt','factura*','factura?.txt','factura??.txt','p*','*[12].txt','[fF]actura*'].forEach(p => pres.append(el('button', {class:'preset', type:'button', onclick:() => { inp.value = p; upd(); }}, p)));
+  body.append(el('p', {}, el('code', {}, '*'), ' vol dir «qualsevol cosa (o res)». ', el('code', {}, '?'), ' vol dir «exactament un caràcter». ', el('code', {}, '[12]'), ' vol dir «un d’aquests caràcters».'),
+    el('div', {class:'row'}, el('label', {for:'glob-in'}, 'Patró:'), inp), el('p', {class:'small', style:'margin-top:8px'}, 'Prova aquests:'), pres, grid, out);
+  host.append(card('Comodins', 'Laboratori', body)); upd();
+};
+
+TOOLS.perm = host => {
+  const body = el('div', {class:'tool-body'}); const P = [[1,1,1],[1,0,1],[0,0,0]]; let dir = false;
+  const WHO = ['Propietari (u)','Grup (g)','Altres (o)'], L = ['r','w','x'], V = [4,2,1];
+  const grid = el('div', {class:'permgrid'}); grid.append(el('span'), ...['r · 4','w · 2','x · 1'].map(t => el('span', {class:'h'}, t)));
+  const bs = WHO.map((w, i) => { grid.append(el('span', {class:'who'}, w)); return L.map((l, j) => { const b = el('button', {class:'pbit', type:'button', 'aria-label':w + ' ' + l});
+    b.addEventListener('click', () => { P[i][j] ^= 1; upd(); }); grid.append(b); return b; }); });
+  const oct = el('input', {class:'field', id:'perm-oct', type:'text', inputmode:'numeric', maxlength:'3', style:'width:6ch;font-family:var(--f-mono)', 'aria-label':'Permisos en octal'});
+  const seg = el('div', {class:'seg', role:'group', 'aria-label':'Tipus'}); const sf = el('button', {type:'button', class:'on'}, 'Fitxer'), sd = el('button', {type:'button'}, 'Carpeta'); seg.append(sf, sd);
+  sf.addEventListener('click', () => { dir = false; sf.classList.add('on'); sd.classList.remove('on'); upd(); });
+  sd.addEventListener('click', () => { dir = true; sd.classList.add('on'); sf.classList.remove('on'); upd(); });
+  const sym = el('span', {class:'big'}), num = el('span', {class:'big'}), cmd = el('code'), expl = el('div', {class:'msg info', 'aria-live':'polite'});
+  const VERB = { f:{r:'llegir-lo', w:'modificar-lo', x:'executar-lo com a programa'}, d:{r:'veure què hi ha a dins', w:'crear i esborrar fitxers a dins', x:'entrar-hi (cd)'} };
+  function upd(){
+    bs.forEach((row, i) => row.forEach((b, j) => { b.classList.toggle('on', !!P[i][j]); b.textContent = P[i][j] ? L[j] : '-'; }));
+    const s = P.map(r => r.map((x, j) => x ? L[j] : '-').join('')).join(''), o = P.map(r => r.reduce((a, x, j) => a + x*V[j], 0)).join('');
+    sym.textContent = (dir ? 'd' : '-') + s; num.textContent = o; if (document.activeElement !== oct) oct.value = o;
+    cmd.textContent = 'chmod ' + o + (dir ? ' carpeta' : ' fitxer.txt');
+    const v = VERB[dir ? 'd' : 'f']; expl.innerHTML = '';
+    ['El propietari','El grup','Els altres'].forEach((w, i) => { const can = L.filter((l, j) => P[i][j]).map(l => v[l]);
+      expl.append(el('p', {}, el('b', {}, w + ': '), can.length ? 'pot ' + can.join(', ') + '.' : 'no pot fer res.', el('span', {class:'small'}, '  (' + P[i].map((x, j) => x ? V[j] : 0).join(' + ') + ' = ' + P[i].reduce((a, x, j) => a + x*V[j], 0) + ')'))); });
+    if (o[2] !== '0' && P[2][1]) expl.append(el('p', {class:'small'}, '⚠ Qualsevol usuari de l’equip pot modificar-ho. Normalment no és bona idea.'));
+  }
+  oct.addEventListener('input', () => { const m = oct.value.match(/^[0-7]{3}$/); if (!m) return; [...oct.value].forEach((d, i) => { const n = +d; P[i] = V.map(x => (n & x) ? 1 : 0); }); upd(); });
+  const pres = el('div', {class:'presets'}); ['644','600','755','750','700','777'].forEach(p => pres.append(el('button', {class:'preset', type:'button', onclick:() => { oct.value = p; oct.dispatchEvent(new Event('input')); }}, p)));
+  body.append(el('div', {class:'row'}, el('span', {}, 'És un'), seg, el('label', {for:'perm-oct', style:'margin-left:auto'}, 'Octal:'), oct),
+    grid, el('dl', {class:'kv'}, el('dt', {}, 'ls -l mostra'), el('dd', {}, sym), el('dt', {}, 'En número'), el('dd', {}, num), el('dt', {}, 'Ordre'), el('dd', {}, cmd)),
+    el('p', {class:'small', style:'margin-top:10px'}, 'Combinacions habituals:'), pres, expl);
+  host.append(card('Calculadora de permisos', 'Eina', body)); upd();
+};
+
+TOOLS.fs = host => {
+  const REQ = [
+    ['win','S’ha de llegir i escriure des de Windows',true],
+    ['lin','S’ha de llegir i escriure des de Linux',true],
+    ['mac','S’ha d’escriure des d’un Mac',false],
+    ['old','Ha de funcionar en aparells antics (tele, cotxe, consola)',false],
+    ['big','Hi guardaré fitxers de més de 4 GiB (vídeos, imatges ISO)',true],
+    ['perm','Necessito permisos per a cada usuari',false],
+    ['jour','Ha d’aguantar bé un tall de llum (journaling)',false]];
+  const FS = {
+    FAT32:{win:1,lin:1,mac:1,old:1,big:0,perm:0,jour:0, why:{big:'màxim 4 GiB per fitxer',perm:'no té permisos',jour:'no té journaling'}},
+    exFAT:{win:1,lin:1,mac:1,old:0,big:1,perm:0,jour:0, why:{old:'els aparells antics no sempre el llegeixen',perm:'no té permisos',jour:'no té journaling'}},
+    NTFS:{win:1,lin:1,mac:0,old:0,big:1,perm:1,jour:1, why:{mac:'macOS només el llegeix',old:'pocs aparells el llegeixen'}},
+    ext4:{win:0,lin:1,mac:0,old:0,big:1,perm:1,jour:1, why:{win:'Windows no el llegeix sense programes extra',mac:'macOS no el llegeix',old:'els aparells no el llegeixen'}}};
+  const body = el('div', {class:'tool-body'}); const reqs = el('div', {class:'fsreq'}); const cards = el('div', {class:'fscards'}); const sum = el('div', {class:'msg info', 'aria-live':'polite'});
+  const boxes = REQ.map(([k, t, on]) => { const c = el('input', {type:'checkbox', id:'fs-' + k}); c.checked = on; c.addEventListener('change', upd); reqs.append(el('label', {for:'fs-' + k}, c, t)); return [k, c]; });
+  function upd(){ cards.innerHTML = ''; const need = boxes.filter(([k, c]) => c.checked).map(([k]) => k); const ok = [];
+    Object.entries(FS).forEach(([n, f]) => { const fails = need.filter(k => !f[k]); const pass = !fails.length; if (pass) ok.push(n);
+      const ul = el('ul'); fails.forEach(k => ul.append(el('li', {}, f.why[k])));
+      if (pass) ul.append(el('li', {}, 'Compleix tot el que has marcat.'));
+      cards.append(el('div', {class:'fsc ' + (pass ? 'pass' : 'fail')}, el('h4', {}, n), el('span', {class:'verdict'}, pass ? '✔ Serveix' : '✘ No serveix'), ul)); });
+    sum.className = ok.length ? 'msg ok' : 'msg ko';
+    sum.textContent = ok.length ? (ok.length === 1 ? 'La millor opció és ' + ok[0] + '.' : 'Serveixen ' + ok.join(' i ') + '. Si dubtes, tria el que menys problemes de compatibilitat doni amb els equips que faràs servir.') : 'Cap sistema d’arxius compleix tots els requisits. Hauràs de renunciar a algun, o fer servir dues particions.'; }
+  body.append(el('p', {}, 'Marca què necessites i mira quins sistemes d’arxius serveixen. Així s’argumenta una tria a l’evidència E05.'), reqs, cards, sum);
+  host.append(card('Quin sistema d’arxius?', 'Assistent', body)); upd();
+};
+
+TOOLS.journal = host => {
+  const body = el('div', {class:'tool-body'}); let J = true, step = 0, cut = false;
+  const BASE = ['Reserva blocs lliures al disc','Escriu les dades de la foto en aquests blocs','Afegeix «foto.jpg» al directori i l’apunta als blocs','Marca els blocs com a ocupats'];
+  const list = () => J ? ['Apunta a la llibreta: «copiaré foto.jpg»', ...BASE, 'Ratlla la nota de la llibreta: feina acabada'] : BASE;
+  const ol = el('ol', {class:'jsteps'}); const msg = el('div', {class:'msg info', 'aria-live':'polite'});
+  const seg = el('div', {class:'seg', role:'group', 'aria-label':'Journaling'}); const on = el('button', {type:'button', class:'on'}, 'Amb journaling (ext4, NTFS)'), off = el('button', {type:'button'}, 'Sense journaling (FAT32, ext2)'); seg.append(on, off);
+  const nxt = el('button', {class:'btn', type:'button'}, 'Següent pas'), zap = el('button', {class:'btn ghost', type:'button'}, '⚡ Tall de llum ara'), rst = el('button', {class:'btn ghost', type:'button'}, 'Torna a començar');
+  on.addEventListener('click', () => { J = true; on.classList.add('on'); off.classList.remove('on'); reset(); });
+  off.addEventListener('click', () => { J = false; off.classList.add('on'); on.classList.remove('on'); reset(); });
+  function reset(){ step = 0; cut = false; draw(); msg.className = 'msg info'; msg.textContent = 'Estàs copiant foto.jpg a una memòria. Avança pas a pas i prova de tallar la llum a mig camí.'; }
+  function draw(){ ol.innerHTML = ''; const L = list();
+    L.forEach((t, i) => ol.append(el('li', {class:(i < step ? 'done' : (i === step && !cut ? 'doing' : '')) + (J && (i === 0 || i === L.length - 1) ? ' journal' : '')}, el('span', {class:'m'}, i < step ? '✔' : (cut && i === step ? '⚡' : '·')), t)));
+    nxt.disabled = cut || step >= L.length; zap.disabled = cut || step >= L.length; }
+  nxt.addEventListener('click', () => { step++; draw(); if (step >= list().length) { msg.className = 'msg ok'; msg.textContent = '✔ Còpia completa. Si ara se’n va la llum, no passa res: tot està en ordre.'; } });
+  zap.addEventListener('click', () => { cut = true; draw(); const L = list(); msg.innerHTML = '';
+    let ok, txt;
+    if (step === 0) { ok = true; txt = 'No s’havia començat res. El disc està igual que abans.'; }
+    else if (J) { ok = true; txt = 'En tornar la llum, el sistema llegeix la llibreta i hi veu una feina sense ratllar. Només revisa aquesta feina: la desfà (o l’acaba) en uns segons. Potser la foto no s’ha copiat, però el disc queda coherent.'; }
+    else if (step >= L.length) { ok = true; txt = 'La còpia ja havia acabat.'; }
+    else { ok = false; txt = step === 1 ? 'Hi ha blocs reservats que ningú fa servir: espai perdut. ' : step === 2 ? 'Les dades són al disc, però cap nom hi apunta: la foto s’ha perdut i l’espai queda ocupat. ' : 'El directori diu que «foto.jpg» existeix, però els blocs consten com a lliures: un altre fitxer els podria sobreescriure. '; txt += 'El sistema no sap què estava fent, així que ha de revisar TOT el disc (fsck a Linux, chkdsk a Windows). Pot tardar molt i no sempre ho arregla.'; }
+    msg.className = ok ? 'msg ok' : 'msg ko'; msg.append(el('b', {}, ok ? 'Sistema coherent. ' : 'Disc inconsistent. '), txt); });
+  rst.addEventListener('click', reset);
+  body.append(el('div', {class:'row'}, seg), ol, el('div', {class:'row'}, nxt, zap, rst), msg);
+  host.append(card('Tall de llum', 'Simulador', body)); reset();
+};
+
+$$('[data-tool]').forEach(h => { const f = TOOLS[h.dataset.tool]; if (f) try { f(h); } catch(e) { console.error(e); } });
+
+refreshProgress();
+route();
+})();
+</script>
